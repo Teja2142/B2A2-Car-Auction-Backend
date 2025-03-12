@@ -3,6 +3,13 @@ from rest_framework.decorators import api_view
 from .models import User
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
+from django.core.mail import send_mail
+from django.conf import settings
+from django.shortcuts import render
+
+@api_view(['GET'])
+def home(request):
+    return render(request, 'index.html')
 
 # ✅ Register User
 @api_view(['POST'])
@@ -61,10 +68,27 @@ def request_password_reset(request):
     user.reset_token = reset_token
     user.save()
 
-    # Simulate sending an email (replace with actual email logic)
-    print(f"Password reset link: http://127.0.0.1:8000/api/password-reset/{reset_token}/")
+    # Build the password reset link
+    reset_link = f"http://127.0.0.1:8000/api/password-reset/{reset_token}/"
 
-    return JsonResponse({"message": "Password reset link sent to email.", "reset_token": str(reset_token)}, status=200)
+    # Send the password reset email
+    subject = "Password Reset Request"
+    message = f"Click the link below to reset your password:\n{reset_link}"
+    from_email = settings.EMAIL_HOST_USER  # Sender's email (configured in environment variables)
+
+    print("from_email:",from_email)
+    print("to_email:",email)
+
+    send_mail(
+        subject,           # Subject line
+        message,           # Message body
+        from_email,        # From email
+        [email],           # Recipient list
+        fail_silently=False,  # If the email fails, Django will raise an exception
+    )
+
+    return JsonResponse({"message": "Password reset link sent to email."}, status=200)
+
 
 # ✅ Reset Password
 @api_view(['POST'])

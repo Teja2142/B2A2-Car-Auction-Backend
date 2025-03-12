@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>B2A2 Car Auction</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .hero-image {
+      background-image: url('static/images/car.png'); /* Replace with actual image path */
+      background-size: cover;
+      background-position: center;
+      height: 70vh;
+    }
+    .cta-btn {
+      background-color: #f76c6c;
+      color: white;
+      font-weight: bold;
+    }
+    .cta-btn:hover {
+      background-color: #f44336;
+    }
+  </style>
+</head>
+<body>
+    
+
+  <!-- Hero Section -->
+  <div class="hero-image text-center d-flex justify-content-center align-items-center">
+    <div class="text-white">
+      <h1 class="display-4 text-center">Welcome to B2A2 Car Auction</h1>
+      <p class="lead">Find your next car at amazing prices. Your dream car is just a bid away!</p>
+      <a href="#inventory" class="btn cta-btn btn-lg">View Inventory</a>
+    </div>
+  </div>
+
+  <!-- About Section -->
+  <section id="about" class="py-5 text-center bg-light">
+    <div class="container">
+      <h2 class="display-4">About Us</h2>
+      <p class="lead">At B2A2 Car Auction, we offer a wide variety of vehicles for auction, from luxury cars to everyday rides. Join our auctions and find your perfect car.</p>
+    </div>
+  </section>
+
+  <!-- Cars for Sale Section -->
+  <section id="inventory" class="py-5">
+    <div class="container">
+      <h2 class="text-center mb-5">Cars for Sale</h2>
+      <div class="row">
+        <!-- Car 1 -->
+        <div class="col-md-4 mb-4">
+          <div class="card">
+            <img src="https://digitalassets.tesla.com/tesla-contents/image/upload/f_auto,q_auto/Model-S-Performance-Desktop.jpg" class="card-img-top" alt="Tesla Model S"> <!-- Replace with actual image path -->
+            <div class="card-body">
+              <h5 class="card-title">Tesla Model S</h5>
+              <p class="card-text">A luxury electric sedan with cutting-edge technology.</p>
+              <a href="#" class="btn cta-btn">Bid Now</a>
+            </div>
+          </div>
+        </div>
+        <!-- Car 2 -->
+        <div class="col-md-4 mb-4">
+          <div class="card">
+            <img src="https://www.vdm.ford.com/content/dam/vdm_ford/live/en_us/ford/nameplate/mustang/2024/collections/_360/atlas-blue/mst_24_gtp_ext_360_atlas_blue_01.jpg" class="card-img-top" alt="Ford Mustang"> <!-- Replace with actual image path -->
+            <div class="card-body">
+              <h5 class="card-title">Ford Mustang</h5>
+              <p class="card-text">An iconic muscle car with a powerful V8 engine.</p>
+              <a href="#" class="btn cta-btn">Bid Now</a>
+            </div>
+          </div>
+        </div>
+        <!-- Car 3 -->
+        <div class="col-md-4 mb-4">
+          <div class="card">
+            <img src="https://imgd.aeplcdn.com/370x208/n/cw/ec/39232/911-exterior-right-front-three-quarter-154382.jpeg?isig=0&wm=1&q=80" class="card-img-top" alt="Porsche 911"> <!-- Replace with actual image path -->
+            <div class="card-body">
+              <h5 class="card-title">Porsche 911</h5>
+              <p class="card-text">A high-performance sports car with timeless design.</p>
+              <a href="#" class="btn cta-btn">Bid Now</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer Section -->
+  <footer class="bg-dark text-white py-4 text-center">
+    <p>&copy; 2025 B2A2 Car Auction. All Rights Reserved.</p>
+  </footer>
+
+  <!-- Bootstrap JS and dependencies -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>
