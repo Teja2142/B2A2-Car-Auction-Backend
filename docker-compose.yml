@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  django:
+    build: .
+    command: bash -c "python3 manage.py makemigrations  &&  python3 manage.py && python3 manage.py runserver"
+    container_name: B2A2-Car-Auction
+    ports:
+      - 8000:8000
+    volumes:
+      - .:/B2A2-Car-Auction
+    environment:
+      - DEBUG=TRUE
+  

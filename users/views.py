@@ -68,8 +68,14 @@ def request_password_reset(request):
     user.reset_token = reset_token
     user.save()
 
+    pswd_reset_base_url = settings.PSWD_RESET_BASE_LINK
+
     # Build the password reset link
-    reset_link = f"http://127.0.0.1:8000/api/password-reset/{reset_token}/"
+    reset_link = f"{pswd_reset_base_url}/{reset_token}/"
+    try:
+        send_reset_pswd_link_message(reset_link, user)
+    except:
+        print(f'unable to send pswd rest mail from mailgun to the user')
 
     # Send the password reset email
     subject = "Password Reset Request"
@@ -110,3 +116,21 @@ def reset_password(request, token):
     user.save()
 
     return JsonResponse({"message": "Password reset successful!"}, status=200)
+
+
+
+
+
+import os
+import requests
+def send_reset_pswd_link_message(reset_link,user):
+  	return requests.post(
+  		"https://api.mailgun.net/v3/sandboxf934aad3f3b64cd4a7a1311ffcdd545f.mailgun.org/messages",
+  		auth=("api", os.getenv('API_KEY', '0c887d2082c0cd158bf2a0892c23f52a-623424ea-31107b3f')),
+  		data={"from": "Mailgun Sandbox <postmaster@sandboxf934aad3f3b64cd4a7a1311ffcdd545f.mailgun.org>",
+			"to": f"{user.name} <{user.email}>",
+  			"subject": f"Hello {user.name} Password Reset Request ",
+  			"text": f"""Hello {user.name}
+                        Click the link below to reset your password:\n {reset_link}
+            """})
+

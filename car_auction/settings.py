@@ -138,6 +138,7 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD','swpj pzrv yxkx acde'
 EMAIL_HOST = os.environ.get('EMAIL_HOST','smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = bool(os.environ.get('EMAIL_USE_TLS', True))
+PSWD_RESET_BASE_LINK = os.environ.get('PSWD_RESET_BASE_LINK', "http://127.0.0.1:8000/api/password-reset")
 
 CSRF_TRUSTED_ORIGINS = [
     'https://b2a2-car-auction.onrender.com',  # Add your frontend URL here
