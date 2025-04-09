@@ -6,10 +6,18 @@ import uuid
 from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import render
+import os
+import requests
 
-@api_view(['GET'])
-def home(request):
-    return render(request, 'index.html')
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
 
 # ✅ Register User
 @api_view(['POST'])
@@ -71,7 +79,7 @@ def request_password_reset(request):
     pswd_reset_base_url = settings.PSWD_RESET_BASE_LINK
 
     # Build the password reset link
-    reset_link = f"{pswd_reset_base_url}/{reset_token}/"
+    reset_link = f"{pswd_reset_base_url}/{reset_token}"
     try:
         send_reset_pswd_link_message(reset_link, user)
     except:
@@ -96,33 +104,39 @@ def request_password_reset(request):
     return JsonResponse({"message": "Password reset link sent to email."}, status=200)
 
 
-# ✅ Reset Password
-@api_view(['POST'])
+
+
+# ✅ Password Reset Form - GET Request
+@api_view(['GET', 'POST'])
 def reset_password(request, token):
     try:
         user = User.objects.get(reset_token=token)
     except User.DoesNotExist:
         return JsonResponse({"message": "Invalid or expired token"}, status=400)
 
-    new_password = request.data.get("password")
-    confirm_password = request.data.get("confirmPassword")
+    if request.method == 'GET':
+        # Render the password reset form
+        return render(request, 'registration/password_reset_confirm.html', {"token": token})
 
-    if not new_password or new_password != confirm_password:
-        return JsonResponse({"message": "Passwords do not match"}, status=400)
+    if request.method == 'POST':
+        new_password = request.POST.get("password")
+        confirm_password = request.POST.get("confirmPassword")
 
-    # Update password
-    user.password = make_password(new_password)
-    user.reset_token = None  # Invalidate token
-    user.save()
+        if not new_password or new_password != confirm_password:
+            return JsonResponse({"message": "Passwords do not match"}, status=400)
 
-    return JsonResponse({"message": "Password reset successful!"}, status=200)
+        # Update password
+        user.password = make_password(new_password)
+        user.reset_token = None  # Invalidate token
+        user.save()
+
+        return JsonResponse({"message": "Password reset successful!"}, status=200)
 
 
 
 
 
-import os
-import requests
+
 def send_reset_pswd_link_message(reset_link,user):
   	return requests.post(
   		"https://api.mailgun.net/v3/sandboxf934aad3f3b64cd4a7a1311ffcdd545f.mailgun.org/messages",
@@ -134,3 +148,24 @@ def send_reset_pswd_link_message(reset_link,user):
                         Click the link below to reset your password:\n {reset_link}
             """})
 
+
+
+# users/views.py
+
+
+
+class CustomObtainAuthToken(ObtainAuthToken):
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({'error': 'Invalid email or password'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user.check_password(password):
+            return Response({'error': 'Invalid email or password'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key})

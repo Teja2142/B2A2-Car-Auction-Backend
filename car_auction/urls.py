@@ -16,14 +16,18 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from users import views
-
-
+from auction import views as auction_views
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('',views.home, name="home"),
-    path('api/', include('users.urls')),
-    path('api/', include('auction.urls')),   
+    path('', auction_views.home, name="home"),
+
+    # Grouping API under /api/
+    path('api/users/', include('users.urls')),
+    path('api/auction/', include('auction.urls')),
 ]
 
+# Serve media files in development
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

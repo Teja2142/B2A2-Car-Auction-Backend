@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'auction',
     'users',
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
@@ -130,7 +131,7 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com']
+ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER','chaitusrvy1@gmail.com')
@@ -148,3 +149,22 @@ CORS_ALLOWED_ORIGINS = [
     'https://b2a2-car-auction.onrender.com',  # Your frontend URL
 ]
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+
+
+
+
+INSTALLED_APPS += [
+    'rest_framework.authtoken',
+]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
