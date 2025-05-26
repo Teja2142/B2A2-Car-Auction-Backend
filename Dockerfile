@@ -1,12 +1,11 @@
 FROM python:3.9-slim-buster
 
-WORKDIR /B2A2-Car-Auction
+WORKDIR /app
 
-COPY requirements.txt requirements.txt
+COPY requirements.txt .
 
 RUN pip install -r requirements.txt
 
 COPY . .
 
-CMD python3 manage.py runserver 
-
+CMD ["python3", "manage.py", "runserver", "0.0.0.0:8000"]
