@@ -19,6 +19,21 @@ from django.urls import path, include
 from auction import views as auction_views
 from django.conf import settings
 from django.conf.urls.static import static
+from drf_yasg.views import get_schema_view
+from drf_yasg import openapi
+from rest_framework import permissions
+
+schema_view = get_schema_view(
+   openapi.Info(
+      title="B2A2 Car Auction API",
+      default_version='v1',
+      description="API documentation for MY B2A2 Car Auction App",
+      terms_of_service="https://www.google.com/policies/terms/",
+      contact=openapi.Contact(email="support@b2a2-car-auction.com"),
+   ),
+   public=True,
+   permission_classes=(permissions.AllowAny,),
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +42,10 @@ urlpatterns = [
     # Grouping API under /api/
     path('api/users/', include('users.urls')),
     path('api/auction/', include('auction.urls')),
+
+    # drf-yasg documentation
+    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
 ]
 
 # Serve media files in development
