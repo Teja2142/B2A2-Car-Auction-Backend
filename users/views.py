@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from .models import User
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
@@ -9,15 +9,11 @@ from django.conf import settings
 from django.shortcuts import render
 import os
 import requests
-
+from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework import status
-from django.contrib.auth import get_user_model
-
-User = get_user_model()
-
 
 
 # Registration - PUBLIC
@@ -79,45 +75,42 @@ def login_user(request):
 @permission_classes([AllowAny])
 def request_password_reset(request):
     email = request.data.get('email')
+    if not email:
+        return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return JsonResponse({"message": "Email not found"}, status=400)
+        return Response({"message": "Email not found"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Generate and save a unique token
     reset_token = uuid.uuid4()
     user.reset_token = reset_token
     user.save()
 
-    # pswd_reset_base_url = settings.PSWD_RESET_BASE_LINK
-
-    # Build the password reset link
-    # reset_link = f"{pswd_reset_base_url}/{reset_token}"
+    # Build the password reset link using backend URL
     reset_link = request.build_absolute_uri(f"/api/users/password-reset/{reset_token}/")
     print("reset_link:", reset_link)
-    try:
-        send_reset_pswd_link_message(reset_link, user)
-    except:
-        print(f'unable to send pswd rest mail from mailgun to the user')
 
     # Send the password reset email
     subject = "Password Reset Request"
     message = f"Click the link below to reset your password:\n{reset_link}"
-    from_email = settings.EMAIL_HOST_USER  # Sender's email (configured in environment variables)
-
-    print("from_email:",from_email)
-    print("to_email:",email)
-
+    from_email = settings.EMAIL_HOST_USER
     send_mail(
-        subject,           # Subject line
-        message,           # Message body
-        from_email,        # From email
-        [email],           # Recipient list
-        fail_silently=False,  # If the email fails, Django will raise an exception
+        subject,
+        message,
+        from_email,
+        [email],
+        fail_silently=False,
     )
 
-    return JsonResponse({"message": "Password reset link sent to email."}, status=200)
+    # (Optional) Also send via Mailgun if needed
+    try:
+        send_reset_pswd_link_message(reset_link, user)
+    except Exception as e:
+        print(f'unable to send pswd reset mail from mailgun to the user: {e}')
+
+    return Response({"message": "Password reset link sent to email."}, status=status.HTTP_200_OK)
 
 # Password Reset Confirm - PUBLIC
 @api_view(['GET', 'POST'])
