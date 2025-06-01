@@ -1,19 +1,15 @@
 from rest_framework import serializers
-from .models import User
+from .models import PasswordResetToken, User
 
 class UserSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+
     class Meta:
         model = User
-        fields = ['id', 'name', 'mobile', 'email', 'password']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ['id', 'username', 'email', 'mobile', 'first_name', 'last_name', 'full_name']
 
-    def create(self, validated_data):
-        return User.objects.create(**validated_data)
-
-
-
-from .models import PasswordResetToken, User
-from django.core.mail import send_mail
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -28,13 +24,13 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         token = PasswordResetToken.objects.create(user=user)
 
         # Send password reset email
-        reset_link = f"http://127.0.0.1:3000/reset-password/{token.token}"
-        send_mail(
-            "Password Reset Request",
-            f"Click the link below to reset your password:\n{reset_link}",
-            "no-reply@yourdomain.com",
-            [user.email],
-        )
+        # reset_link = f"http://127.0.0.1:3000/reset-password/{token.token}"
+        # send_mail(
+        #     "Password Reset Request",
+        #     f"Click the link below to reset your password:\n{reset_link}",
+        #     "no-reply@yourdomain.com",
+        #     [user.email],
+        # )
         return token
     
     

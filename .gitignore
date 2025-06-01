@@ -1,3 +1,8 @@
 \car_venv
 \__pycache__
 *\__pycache__
+\.car_venv
+\.venv
+*.pyc
+*.pyo
+*.pyd

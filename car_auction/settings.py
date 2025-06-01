@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +27,7 @@ SECRET_KEY = 'django-insecure-l*h1*5hb04fp5vfgd_ft299@)7=2#9t866xk75x^zro-qwm41!
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
 
 # Application definition
@@ -42,6 +43,7 @@ INSTALLED_APPS = [
     'auction',
     'users',
     'rest_framework',
+    'drf_yasg',  # For API documentation
 ]
 
 MIDDLEWARE = [
@@ -121,11 +123,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
-
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
@@ -136,27 +134,25 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
 
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER','chaitusrvy1@gmail.com')
-EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD','swpj pzrv yxkx acde')
-EMAIL_HOST = os.environ.get('EMAIL_HOST','smtp.gmail.com')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'chaitusrvy1@gmail.com')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', 'swpj pzrv yxkx acde')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
-EMAIL_USE_TLS = bool(os.environ.get('EMAIL_USE_TLS', True))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 PSWD_RESET_BASE_LINK = os.environ.get('PSWD_RESET_BASE_LINK', "http://127.0.0.1:8000/api/password-reset")
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://b2a2-car-auction.onrender.com',  # Add your frontend URL here
+    'https://b2a2-car-auction.onrender.com',
 ]
 
 CORS_ALLOWED_ORIGINS = [
-    'https://b2a2-car-auction.onrender.com',  # Your frontend URL
+    'https://b2a2-car-auction.onrender.com',
 ]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
-
-
-
+AUTH_USER_MODEL = 'users.User'
 
 INSTALLED_APPS += [
     'rest_framework.authtoken',
