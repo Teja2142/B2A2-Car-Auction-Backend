@@ -1,6 +1,6 @@
 # 🚗 B2A2 Car Auction Backend
 
-Welcome to the backend for make **B2A2 Car Auction** – a Django REST API for managing car auctions, bidding, and user authentication.
+Welcome to the backend for make good **B2A2 Car Auction** – a Django REST API for managing car auctions, bidding, and user authentication.
 
 ---
 
