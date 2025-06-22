@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os
 import sys
+import logging
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,10 +23,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-l*h1*5hb04fp5vfgd_ft299@)7=2#9t866xk75x^zro-qwm41!'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-l*h1*5hb04fp5vfgd_ft299@)7=2#9t866xk75x^zro-qwm41!')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
@@ -165,4 +166,27 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/day',   # Authenticated users: 1000 requests per day
+        'anon': '100/day',    # Unauthenticated users: 100 requests per day
+    },
 }
+
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Token': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'Format: Token <your-token-here>',
+        }
+    },
+}
+
+logging.basicConfig(level=logging.INFO)
+
+# Note: For future JWT and role-based permissions, update DEFAULT_AUTHENTICATION_CLASSES and add custom permissions as needed.
