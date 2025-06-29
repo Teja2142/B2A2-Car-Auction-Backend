@@ -7,6 +7,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'mobile', 'first_name', 'last_name', 'full_name']
+        read_only_fields = ['id']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
@@ -33,8 +34,19 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         # )
         return token
     
+class RegisterSerializer(serializers.Serializer):
+    name = serializers.CharField()
+    mobile = serializers.CharField()
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    confirmPassword = serializers.CharField(write_only=True)   
     
     
-    
-    
-    
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+    confirmPassword = serializers.CharField(write_only=True)
+

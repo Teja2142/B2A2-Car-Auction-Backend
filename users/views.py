@@ -10,24 +10,63 @@ from django.shortcuts import render
 import os
 import requests
 from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 from rest_framework import status
+from drf_yasg.utils import swagger_auto_schema
+from rest_framework import serializers
+from rest_framework.authtoken.views import ObtainAuthToken
+from .serializers import RegisterSerializer, LoginSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
-# Registration - PUBLIC
+
+@swagger_auto_schema(method='post', request_body=LoginSerializer, responses={200: 'Login successful', 400: 'Invalid email or password'})
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    """
+    User login endpoint. Accepts email and password, returns token and user info on success.
+    """
+    serializer = LoginSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    email = serializer.validated_data['email']
+    password = serializer.validated_data['password']
+
+    try:
+        user = User.objects.get(email=email)
+    except User.DoesNotExist:
+        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not user.check_password(password):
+        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
+
+    token, _ = Token.objects.get_or_create(user=user)
+    return Response({
+        "message": "Login successful",
+        "user": {"id": str(user.id), "username": user.username, "email": user.email},
+        "token": token.key
+    }, status=status.HTTP_200_OK)
+
+
+
+@swagger_auto_schema(method='post', request_body=RegisterSerializer, responses={201: 'Registration successful', 400: 'Validation error'})
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
-    name = request.data.get('name')
-    mobile = request.data.get('mobile')
-    email = request.data.get('email')
-    password = request.data.get('password')
-    confirm_password = request.data.get('confirmPassword')
-
-    if not all([name, mobile, email, password, confirm_password]):
-        return Response({"message": "All fields are required"}, status=status.HTTP_400_BAD_REQUEST)
+    """
+    User registration endpoint. Accepts name, mobile, email, password, confirmPassword. Returns success message on registration.
+    """
+    serializer = RegisterSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    name = serializer.validated_data['name']
+    mobile = serializer.validated_data['mobile']
+    email = serializer.validated_data['email']
+    password = serializer.validated_data['password']
+    confirm_password = serializer.validated_data['confirmPassword']
 
     if password != confirm_password:
         return Response({"message": "Passwords do not match"}, status=status.HTTP_400_BAD_REQUEST)
@@ -41,36 +80,10 @@ def register_user(request):
     user = User(username=name, mobile=mobile, email=email)
     user.set_password(password)
     user.save()
-    return Response({"message": "Registration successful!"}, status=status.HTTP_201_CREATED)
-
-# Login - PUBLIC
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_user(request):
-    email = request.data.get('email')
-    password = request.data.get('password')
-
-    if not email or not password:
-        return Response({"message": "Email and password are required"}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not check_password(password, user.password):
-        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Get or create token
-    token, _ = Token.objects.get_or_create(user=user)
-
-    return Response({
-        "message": "Login successful",
-        "user": {"username": user.username, "email": user.email},
-        "token": token.key
-    }, status=status.HTTP_200_OK)
+    return Response({"message": "Registration successful!", "user": {"id": str(user.id), "username": user.username, "email": user.email}}, status=status.HTTP_201_CREATED)
 
 # Password Reset Request - PUBLIC
+@swagger_auto_schema(method='post', request_body=PasswordResetRequestSerializer)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_password_reset(request):
@@ -108,11 +121,15 @@ def request_password_reset(request):
     try:
         send_reset_pswd_link_message(reset_link, user)
     except Exception as e:
-        print(f'unable to send pswd reset mail from mailgun to the user: {e}')
+        # Use logging instead of print for error reporting
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f'Unable to send password reset mail from mailgun to the user: {e}')
 
     return Response({"message": "Password reset link sent to email."}, status=status.HTTP_200_OK)
 
 # Password Reset Confirm - PUBLIC
+@swagger_auto_schema(method='post', request_body=PasswordResetConfirmSerializer)
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def reset_password(request, token):

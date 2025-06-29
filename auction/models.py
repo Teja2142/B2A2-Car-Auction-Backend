@@ -1,18 +1,13 @@
 from django.db import models
 from users.models import User
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+import uuid
 
 User = get_user_model()
 
-# from django.db import models
-# from django.conf import settings
-# from django.utils import timezone
-
-# User = settings.AUTH_USER_MODEL
-
 class Vehicle(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
     year = models.IntegerField()
@@ -24,6 +19,7 @@ class Vehicle(models.Model):
         return f"{self.make} {self.model} ({self.year})"
 
 class VehicleImage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vehicle = models.ForeignKey(Vehicle, related_name='images', on_delete=models.CASCADE)
     image = models.ImageField(upload_to='vehicle_images/')
 
@@ -31,6 +27,7 @@ class VehicleImage(models.Model):
         return f"Image for {self.vehicle}"
 
 class Auction(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vehicle = models.OneToOneField(Vehicle, on_delete=models.CASCADE)
     starting_price = models.DecimalField(max_digits=12, decimal_places=2)
     start_time = models.DateTimeField()
@@ -42,6 +39,7 @@ class Auction(models.Model):
         return f"{self.vehicle} - Auction"
 
 class Bid(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     auction = models.ForeignKey(Auction, on_delete=models.CASCADE, related_name='bids')
     bidder = models.ForeignKey(User, on_delete=models.CASCADE)
     bid_amount = models.DecimalField(max_digits=12, decimal_places=2)
