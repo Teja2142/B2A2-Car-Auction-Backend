@@ -122,12 +122,49 @@ python manage.py runserver
 
 ## 🔐 Authentication
 
-- Use **Token Authentication**.
-- After login, include your token in the `Authorization` header:
+This project uses **JWT (JSON Web Token) Authentication** as the primary method for securing API endpoints.
+
+### Obtain a JWT Token
+
+Send a POST request to:
 
 ```
-Authorization: Token <your_token>
+POST /api/users/token/
+{
+  "email": "your@email.com",
+  "password": "yourpassword"
+}
 ```
+
+Response:
+```
+{
+  "refresh": "<refresh_token>",
+  "access": "<access_token>"
+}
+```
+
+### Use the JWT Token
+
+Include the access token in the `Authorization` header for all authenticated requests:
+
+```
+Authorization: Bearer <access_token>
+```
+
+### Refresh the JWT Token
+
+To get a new access token:
+```
+POST /api/users/token/refresh/
+{
+  "refresh": "<refresh_token>"
+}
+```
+
+### Legacy Token Authentication
+
+Token Authentication is still supported for backward compatibility, but JWT is recommended for all new clients.
 
 ---
 

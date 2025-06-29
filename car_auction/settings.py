@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 import sys
 import logging
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -161,7 +162,8 @@ INSTALLED_APPS += [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',  # Optional: for legacy support
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -171,13 +173,28 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.AnonRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'user': '1000/day',   # Authenticated users: 1000 requests per day
-        'anon': '100/day',    # Unauthenticated users: 100 requests per day
+        'anon': '100/day',
+        'user': '1000/day',
     },
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT Authorization header. Example: Bearer <your-access-token>'
+        },
+        # Optionally keep Token for legacy support
         'Token': {
             'type': 'apiKey',
             'name': 'Authorization',
@@ -185,6 +202,7 @@ SWAGGER_SETTINGS = {
             'description': 'Format: Token <your-token-here>',
         }
     },
+    'USE_SESSION_AUTH': False,
 }
 
 logging.basicConfig(level=logging.INFO)

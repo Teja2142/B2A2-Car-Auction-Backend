@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, status, generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -22,7 +22,7 @@ def home(request):
 class VehicleViewSet(viewsets.ModelViewSet):
     queryset = Vehicle.objects.all()
     serializer_class = VehicleSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]  # Only authenticated users can create/update/delete
     parser_classes = [MultiPartParser, FormParser]
     lookup_field = 'id'  # Use UUID for lookup
@@ -106,7 +106,7 @@ class VehicleViewSet(viewsets.ModelViewSet):
 class AuctionViewSet(viewsets.ModelViewSet):
     queryset = Auction.objects.all()
     serializer_class = AuctionSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
 
@@ -137,7 +137,7 @@ class AuctionViewSet(viewsets.ModelViewSet):
 class BidViewSet(viewsets.ModelViewSet):
     queryset = Bid.objects.all()
     serializer_class = BidSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
 
@@ -171,7 +171,7 @@ class BidViewSet(viewsets.ModelViewSet):
 class PlaceBidView(generics.CreateAPIView):
     queryset = Bid.objects.all()
     serializer_class = BidSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
 
