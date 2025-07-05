@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'auction',
     'users',
+    'vehicles',
+    'dealers',
     'rest_framework',
     'drf_yasg',  # For API documentation
 ]
@@ -161,6 +163,7 @@ INSTALLED_APPS += [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -176,17 +179,32 @@ REST_FRAMEWORK = {
     },
 }
 
+SPECTACULAR_SETTINGS = {
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX_TRIM': True,
+    'SCHEMA_PATH_PREFIX': '/api/',  
+    'TAGS': [
+        {'name': 'users', 'description': 'User and authentication endpoints'},
+        {'name': 'dealers', 'description': 'Dealer endpoints'},
+        {'name': 'vehicles', 'description': 'Vehicle endpoints'},
+        {'name': 'auction', 'description': 'Auction and bid endpoints'},
+    ],
+}
+
 SWAGGER_SETTINGS = {
+    'DEFAULT_AUTO_SCHEMA_CLASS': 'drf_yasg.inspectors.SwaggerAutoSchema',
     'SECURITY_DEFINITIONS': {
-        'Token': {
+        'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
             'in': 'header',
-            'description': 'Format: Token <your-token-here>',
+            'description': 'Format: Bearer <your-access-token>',
         }
     },
 }
 
 logging.basicConfig(level=logging.INFO)
 
-# Note: For future JWT and role-based permissions, update DEFAULT_AUTHENTICATION_CLASSES and add custom permissions as needed.
+LOGIN_URL = '/admin/login/'
+
+# Note: JWT authentication is already enabled; for future role-based permissions, add custom permission classes as needed.

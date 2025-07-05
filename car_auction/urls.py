@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework import permissions
+from django.contrib.auth.decorators import user_passes_test
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -43,10 +44,12 @@ urlpatterns = [
     # Grouping API under /api/
     path('api/users/', include('users.urls')),
     path('api/auction/', include('auction.urls')),
+    path('api/vehicles/', include('vehicles.urls')),
+    path('api/dealers/', include('dealers.urls')),
 
-    # drf-yasg documentation
-    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
+    # drf-yasg documentation (admin only)
+    path('api/docs/', user_passes_test(lambda u: u.is_active and u.is_staff)(schema_view.with_ui('swagger', cache_timeout=0)), name='schema-swagger-ui'),
+    path('api/redoc/', user_passes_test(lambda u: u.is_active and u.is_staff)(schema_view.with_ui('redoc', cache_timeout=0)), name='schema-redoc'),
 ]
 
 # Serve media files in development

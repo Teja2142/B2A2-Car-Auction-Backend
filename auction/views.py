@@ -1,15 +1,16 @@
-from rest_framework import viewsets, permissions, status, generics
-from rest_framework.authentication import TokenAuthentication
+from rest_framework import viewsets, permissions, status, generics, filters
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-
-from .models import Vehicle, Auction, Bid, VehicleImage
-from .serializers import VehicleSerializer, AuctionSerializer, BidSerializer, VehicleImageSerializer
 from django.utils.timezone import now
+
+from .models import Auction, Bid
+from .serializers import AuctionSerializer, BidSerializer
 
 # Home page (public)
 @api_view(['GET'])
@@ -18,97 +19,18 @@ def home(request):
     from django.shortcuts import render
     return render(request, 'index.html')
 
-# Vehicle ViewSet
-class VehicleViewSet(viewsets.ModelViewSet):
-    queryset = Vehicle.objects.all()
-    serializer_class = VehicleSerializer
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]  # Only authenticated users can create/update/delete
-    parser_classes = [MultiPartParser, FormParser]
-    lookup_field = 'id'  # Use UUID for lookup
-
-    def get_permissions(self):
-        # Allow anyone to list/retrieve, restrict create/update/delete
-        if self.action in ['list', 'retrieve']:
-            return [AllowAny()]
-        return [IsAuthenticated()]
-
-    @swagger_auto_schema(
-        operation_description="Create a new vehicle with images.",
-        request_body=VehicleSerializer,
-        responses={201: VehicleSerializer, 400: 'Validation error'},
-        manual_parameters=[]
-    )
-    def create(self, request, *args, **kwargs):
-        required_fields = ['make', 'model', 'year', 'condition', 'max_price']
-        for field in required_fields:
-            if not request.data.get(field):
-                return Response(
-                    {"error": f"'{field}' is required."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-        make = request.data.get('make')
-        model = request.data.get('model')
-        condition = request.data.get('condition')
-
-        try:
-            year = int(request.data.get('year'))
-        except (TypeError, ValueError):
-            return Response({"error": "Year must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            max_price = float(request.data.get('max_price'))
-        except (TypeError, ValueError):
-            return Response({"error": "Max price must be a number."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not request.FILES.getlist('images'):
-            return Response({"error": "At least one image is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Duplicate check (case-insensitive)
-        if Vehicle.objects.filter(
-            make__iexact=make,
-            model__iexact=model,
-            year=year,
-            condition__iexact=condition,
-            max_price=max_price
-        ).exists():
-            return Response(
-                {"error": "A vehicle with the same details already exists."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        vehicle = serializer.save()
-        for image in request.FILES.getlist('images'):
-            VehicleImage.objects.create(vehicle=vehicle, image=image)
-        return Response(self.get_serializer(vehicle).data, status=status.HTTP_201_CREATED)
-
-    @swagger_auto_schema(
-        operation_description="Update a vehicle (partial or full).",
-        request_body=VehicleSerializer,
-        responses={200: VehicleSerializer, 400: 'Validation error'},
-        manual_parameters=[]
-    )
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        vehicle = serializer.save()
-        if 'images' in request.FILES:
-            for image in request.FILES.getlist('images'):
-                VehicleImage.objects.create(vehicle=vehicle, image=image)
-        return Response(self.get_serializer(vehicle).data)
-
 # Auction ViewSet
 class AuctionViewSet(viewsets.ModelViewSet):
     queryset = Auction.objects.all()
     serializer_class = AuctionSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['vehicle', 'start_time', 'end_time', 'highest_bidder']
+    search_fields = ['vehicle__make', 'vehicle__model', 'highest_bidder__email']
+    ordering_fields = ['start_time', 'end_time', 'starting_price', 'highest_bid']
+    ordering = ['-start_time']
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -119,7 +41,8 @@ class AuctionViewSet(viewsets.ModelViewSet):
         operation_description="Create a new auction.",
         request_body=AuctionSerializer,
         responses={201: AuctionSerializer, 400: 'Validation error'},
-        manual_parameters=[]
+        manual_parameters=[],
+        tags=['auction']
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
@@ -128,18 +51,68 @@ class AuctionViewSet(viewsets.ModelViewSet):
         operation_description="Update an auction (partial or full).",
         request_body=AuctionSerializer,
         responses={200: AuctionSerializer, 400: 'Validation error'},
-        manual_parameters=[]
+        manual_parameters=[],
+        tags=['auction']
     )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        tags=['auction'],
+        operation_description="List all auctions. Supports search, ordering, and filtering.",
+        manual_parameters=[
+            openapi.Parameter(
+                'search', openapi.IN_QUERY, description="Search by vehicle make, model, or highest bidder email.", type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'ordering', openapi.IN_QUERY, description="Order by start_time, end_time, starting_price, or highest_bid. Example: ordering=-start_time",
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'vehicle', openapi.IN_QUERY, description="Filter by vehicle ID.", type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'start_time', openapi.IN_QUERY, description="Filter by auction start time (YYYY-MM-DD).", type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'end_time', openapi.IN_QUERY, description="Filter by auction end time (YYYY-MM-DD).", type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'highest_bidder', openapi.IN_QUERY, description="Filter by highest bidder user ID.", type=openapi.TYPE_STRING
+            ),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
 
 # Bid ViewSet
 class BidViewSet(viewsets.ModelViewSet):
     queryset = Bid.objects.all()
     serializer_class = BidSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['auction', 'bidder']
+    search_fields = ['auction__vehicle__make', 'auction__vehicle__model', 'bidder__email']
+    ordering_fields = ['timestamp', 'bid_amount']
+    ordering = ['-timestamp']
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -150,7 +123,8 @@ class BidViewSet(viewsets.ModelViewSet):
         operation_description="Create a new bid.",
         request_body=BidSerializer,
         responses={201: BidSerializer, 400: 'Validation error'},
-        manual_parameters=[]
+        manual_parameters=[],
+        tags=['auction']
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
@@ -159,19 +133,49 @@ class BidViewSet(viewsets.ModelViewSet):
         operation_description="Update a bid (partial or full).",
         request_body=BidSerializer,
         responses={200: BidSerializer, 400: 'Validation error'},
-        manual_parameters=[]
+        manual_parameters=[],
+        tags=['auction']
     )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
+    @swagger_auto_schema(tags=['auction'])
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+    @swagger_auto_schema(tags=['auction'])
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
     def perform_create(self, serializer):
         serializer.save(bidder=self.request.user)
+
+    @swagger_auto_schema(tags=['auction'])
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        tags=['auction'],
+        operation_description="List all bids. Supports search, ordering, and filtering.",
+        manual_parameters=[
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search by auction vehicle make/model or bidder email.", type=openapi.TYPE_STRING),
+            openapi.Parameter('ordering', openapi.IN_QUERY, description="Order by timestamp or bid_amount. Example: ordering=-timestamp", type=openapi.TYPE_STRING),
+            openapi.Parameter('auction', openapi.IN_QUERY, description="Filter by auction ID.", type=openapi.TYPE_STRING),
+            openapi.Parameter('bidder', openapi.IN_QUERY, description="Filter by bidder user ID.", type=openapi.TYPE_STRING),
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
 # Place Bid API (DRF generic view)
 class PlaceBidView(generics.CreateAPIView):
     queryset = Bid.objects.all()
     serializer_class = BidSerializer
-    authentication_classes = [TokenAuthentication]
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     lookup_field = 'id'  # Use UUID for lookup
 
@@ -179,9 +183,10 @@ class PlaceBidView(generics.CreateAPIView):
         operation_description="Place a bid on an auction.",
         request_body=BidSerializer,
         responses={201: openapi.Response('Bid placed successfully', BidSerializer), 400: 'Validation error'},
-        manual_parameters=[]
+        manual_parameters=[],
+        tags=['auction']
     )
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         auction_id = request.data.get("auction")
         bid_amount = request.data.get("bid_amount")
         user = request.user
@@ -198,7 +203,6 @@ class PlaceBidView(generics.CreateAPIView):
         if float(bid_amount) < float(auction.starting_price):
             return Response({"error": "Your bid must be higher than the starting price."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Removed max_price check for best auction practice
         bid = Bid.objects.create(auction=auction, bidder=user, bid_amount=bid_amount)
         auction.highest_bid = bid_amount
         auction.highest_bidder = user

@@ -4,7 +4,10 @@ from django.contrib.auth.models import AbstractUser
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    mobile = models.CharField(max_length=15, unique=True)
+    mobile = models.CharField(
+        max_length=15, unique=True,
+        help_text="Example: +91-9876543210, 5551234567"
+    )
     reset_token = models.UUIDField(blank=True, null=True, unique=True)
 
     def __str__(self):

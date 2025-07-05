@@ -1,0 +1,1 @@
+If you see this, print statements are not showing up in Django test output. Try using self.fail(str(response.data)) in the test to force output.

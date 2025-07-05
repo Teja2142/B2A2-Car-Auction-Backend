@@ -1,0 +1,71 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+    {{ block.super }}
+    <style>
+        .swagger-btn-container {
+            position: fixed;
+            top: 100px;
+            right: 40px;
+            z-index: 1000;
+            background: transparent;
+            box-shadow: none;
+        }
+        .swagger-btn {
+            background: linear-gradient(90deg, #0d47a1 0%, #42a5f5 100%);
+            color: #fff !important;
+            padding: 13px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.12em;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 16px rgba(13, 71, 161, 0.13);
+            transition: background 0.2s, box-shadow 0.2s;
+            border: none;
+            outline: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.12);
+        }
+        .swagger-btn:hover {
+            background: linear-gradient(90deg, #1565c0 0%, #64b5f6 100%);
+            box-shadow: 0 6px 24px rgba(13, 71, 161, 0.18);
+        }
+        .admin-header-center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-top: 4em;
+            margin-bottom: 2em;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 16px rgba(27,106,201,0.08);
+            padding: 2.5em 3em 2em 3em;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .admin-header-center h1 {
+            font-size: 2.2em;
+            color: #1b6ac9;
+            font-weight: 700;
+            margin-bottom: 0.3em;
+        }
+        .admin-header-center p {
+            font-size: 1.15em;
+            color: #555;
+            margin-bottom: 0;
+        }
+        /* Hide the default welcome text and redundant elements */
+        #content-main > h1, #content-main > p, #content-main > ul.object-tools { display: none !important; }
+        body {
+            background: linear-gradient(120deg, #f5faff 0%, #e3f0ff 100%);
+        }
+    </style>
+    <div class="swagger-btn-container">
+        <a href="/api/docs/" class="swagger-btn">Swagger API Docs</a>
+    </div>
+    <div class="admin-header-center">
+        <h1>B2A2 Car Auction Admin Portal</h1>
+        <p>Use the navigation on the left to manage vehicles, dealers, users, and auctions.</p>
+    </div>
+{% endblock %}

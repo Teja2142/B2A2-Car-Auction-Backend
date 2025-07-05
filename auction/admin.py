@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Auction, Bid, Vehicle
+from .models import Auction, Bid
 from django.utils.html import format_html
 
 @admin.register(Auction)
@@ -23,20 +23,3 @@ class BidAdmin(admin.ModelAdmin):
         return f"{obj.auction.vehicle.make} {obj.auction.vehicle.model} ({obj.auction.vehicle.year})"
 
     get_auction_vehicle.short_description = "Vehicle"
-
-@admin.register(Vehicle)
-class VehicleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'make', 'model', 'year', 'condition', 'max_price', 'available', 'image_count', 'image_preview')
-    search_fields = ('make', 'model', 'year')
-    list_filter = ('available', 'year')
-
-    def image_count(self, obj):
-        return obj.images.count()
-    image_count.short_description = 'Image Count'
-
-    def image_preview(self, obj):
-        images = obj.images.all()[:1]  # Show only first image as preview
-        if images:
-            return format_html('<img src="{}" width="100" />', images[0].image.url)
-        return "-"
-    image_preview.short_description = 'Thumbnail'
