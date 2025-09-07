@@ -149,13 +149,20 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 PSWD_RESET_BASE_LINK = os.environ.get('PSWD_RESET_BASE_LINK', "http://127.0.0.1:8000/api/password-reset")
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://b2a2-car-auction.onrender.com',
-]
+# CSRF_TRUSTED_ORIGINS = [
+#     'https://b2a2-car-auction.onrender.com',
+# ]
 
-CORS_ALLOWED_ORIGINS = [
-    'https://b2a2-car-auction.onrender.com',
-]
+# CORS_ALLOWED_ORIGINS = [
+#     'https://b2a2-car-auction.onrender.com',
+# ]
+
+
+CORS_ALLOW_ALL_ORIGINS = True  
+
+# Or if you also need cookies/auth:
+CORS_ALLOW_CREDENTIALS = True
+
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
