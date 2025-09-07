@@ -51,6 +51,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # WhiteNoise allows serving static files in production when DEBUG=False
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -133,6 +135,10 @@ STATICFILES_DIRS = [
     BASE_DIR / "static",
 ]
 
+# Use WhiteNoise storage to serve compressed files and support cache-busting in production.
+# Requires `whitenoise` package and running `python manage.py collectstatic`.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -164,7 +170,44 @@ AUTH_USER_MODEL = 'users.User'
 
 INSTALLED_APPS += [
     'rest_framework.authtoken',
+    'rest_framework_simplejwt.token_blacklist',  # Enable token blacklist
 ]
+
+# JWT Settings
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),  # Short-lived access tokens
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),     # 1-day refresh tokens
+    'ROTATE_REFRESH_TOKENS': True,                   # Get new refresh token with each refresh
+    'BLACKLIST_AFTER_ROTATION': True,               # Blacklist old refresh tokens
+    'UPDATE_LAST_LOGIN': True,                      # Update user's last login
+
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    # For secure cookie storage of refresh tokens
+    'AUTH_COOKIE': 'refresh_token',          # Cookie name for refresh token
+    'AUTH_COOKIE_DOMAIN': None,             # Set this in production
+    'AUTH_COOKIE_SECURE': True,            # Only send over HTTPS
+    'AUTH_COOKIE_HTTP_ONLY': True,         # Prevent JavaScript access
+    'AUTH_COOKIE_PATH': '/',               # Cookie path
+    'AUTH_COOKIE_SAMESITE': 'Lax',         # CSRF protection
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [

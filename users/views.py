@@ -1,6 +1,6 @@
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import User
 from django.contrib.auth.hashers import make_password, check_password
 import uuid
@@ -221,8 +221,21 @@ class CustomObtainAuthToken(ObtainAuthToken):
 
 class SwaggerTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
+    
+    def get_token_cookie_settings(self):
+        settings_dict = {
+            'key': settings.SIMPLE_JWT['AUTH_COOKIE'],
+            'path': settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+            'secure': settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            'httponly': settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+        }
+        if settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']:
+            settings_dict['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
+        return settings_dict
+
     @swagger_auto_schema(
-        operation_description="Obtain JWT access and refresh tokens.",
+        operation_description="Obtain JWT access token (in response) and refresh token (in HTTP-only cookie).",
         tags=['users'],
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
@@ -232,26 +245,159 @@ class SwaggerTokenObtainPairView(TokenObtainPairView):
                 'password': openapi.Schema(type=openapi.TYPE_STRING, format='password'),
             },
         ),
-        responses={200: openapi.Response('JWT token pair', openapi.Schema(type=openapi.TYPE_OBJECT, properties={'access': openapi.Schema(type=openapi.TYPE_STRING), 'refresh': openapi.Schema(type=openapi.TYPE_STRING), 'user': openapi.Schema(type=openapi.TYPE_OBJECT)})), 401: 'Unauthorized'},
+        responses={
+            200: openapi.Response('JWT tokens', openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'access': openapi.Schema(type=openapi.TYPE_STRING),
+                    'user': openapi.Schema(type=openapi.TYPE_OBJECT)
+                }
+            )),
+            401: 'Unauthorized'
+        },
     )
     def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except Exception as e:
+            return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        data = serializer.validated_data
+        response = Response(
+            {
+                "access": data["access"],
+                "user": {
+                    "id": str(serializer.user.id),
+                    "email": serializer.user.email,
+                    "username": serializer.user.username,
+                }
+            },
+            status=status.HTTP_200_OK,
+        )
+
+        # Store refresh token in HttpOnly cookie
+        cookie_settings = self.get_token_cookie_settings()
+        response.set_cookie(
+            value=data["refresh"],
+            **cookie_settings
+        )
+        
+        return response
 
 class SwaggerTokenRefreshView(TokenRefreshView):
+    def get_token_cookie_settings(self):
+        settings_dict = {
+            'key': settings.SIMPLE_JWT['AUTH_COOKIE'],
+            'path': settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+            'secure': settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            'httponly': settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+        }
+        if settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']:
+            settings_dict['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
+        return settings_dict
+
     @swagger_auto_schema(
-        operation_description="Refresh JWT access token.",
+        operation_description="Refresh JWT access token using HTTP-only cookie refresh token.",
         tags=['users'],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['refresh'],
-            properties={
-                'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-            },
-        ),
-        responses={200: openapi.Response('JWT access token', openapi.Schema(type=openapi.TYPE_OBJECT, properties={'access': openapi.Schema(type=openapi.TYPE_STRING)})), 401: 'Unauthorized'},
+        responses={
+            200: openapi.Response(
+                'New access token',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={'access': openapi.Schema(type=openapi.TYPE_STRING)}
+                )
+            ),
+            401: 'Invalid/expired refresh token'
+        },
     )
     def post(self, request, *args, **kwargs):
-        return super().post(request, *args, **kwargs)
+        # Get refresh token from cookie
+        refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE'])
+        
+        if not refresh_token:
+            return Response(
+                {"error": "No refresh token found in cookie"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Add refresh token to request data
+        request.data['refresh'] = refresh_token
+
+        try:
+            response = super().post(request, *args, **kwargs)
+            
+            if response.status_code == 200:
+                # If a new refresh token was issued, update the cookie
+                if 'refresh' in response.data:
+                    cookie_settings = self.get_token_cookie_settings()
+                    response.set_cookie(
+                        value=response.data['refresh'],
+                        **cookie_settings
+                    )
+                    # Remove refresh from response data since it's in cookie
+                    del response.data['refresh']
+            
+            return response
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_token_cookie_settings(self):
+        settings_dict = {
+            'key': settings.SIMPLE_JWT['AUTH_COOKIE'],
+            'path': settings.SIMPLE_JWT['AUTH_COOKIE_PATH'],
+            'secure': settings.SIMPLE_JWT['AUTH_COOKIE_SECURE'],
+            'httponly': settings.SIMPLE_JWT['AUTH_COOKIE_HTTP_ONLY'],
+            'samesite': settings.SIMPLE_JWT['AUTH_COOKIE_SAMESITE'],
+        }
+        if settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']:
+            settings_dict['domain'] = settings.SIMPLE_JWT['AUTH_COOKIE_DOMAIN']
+        return settings_dict
+
+    @swagger_auto_schema(
+        operation_description="Logout user by blacklisting refresh token and clearing cookie.",
+        tags=['users'],
+        responses={
+            200: openapi.Response(
+                'Logged out successfully',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={'detail': openapi.Schema(type=openapi.TYPE_STRING)}
+                )
+            ),
+        },
+    )
+    def post(self, request):
+        try:
+            refresh_token = request.COOKIES.get(settings.SIMPLE_JWT['AUTH_COOKIE'])
+            if refresh_token:
+                # Import here to avoid circular imports
+                from rest_framework_simplejwt.tokens import RefreshToken
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            
+            response = Response({"detail": "Successfully logged out."})
+            
+            # Clear the refresh token cookie
+            cookie_settings = self.get_token_cookie_settings()
+            cookie_settings['max_age'] = 0  # Expire immediately
+            response.delete_cookie(**cookie_settings)
+            
+            return response
+            
+        except Exception as e:
+            return Response(
+                {"error": "Invalid token or token already blacklisted"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class UserEmailTokenObtainView(APIView):
     permission_classes = [AllowAny]
