@@ -1,42 +1,101 @@
 from django.http import JsonResponse
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
-from .models import User
 from django.contrib.auth.hashers import make_password, check_password
-import uuid
 from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import render
-import os
-import requests
-from rest_framework.authtoken.models import Token
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-from drf_yasg.utils import swagger_auto_schema
-from drf_yasg import openapi
-from rest_framework import serializers
+from rest_framework import status, serializers
+from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
-from .serializers import RegisterSerializer, LoginSerializer, PasswordResetRequestSerializer, PasswordResetConfirmSerializer
+from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
+
+from .models import User
+from .serializers import (
+    RegisterSerializer, 
+    LoginSerializer, 
+    PasswordResetRequestSerializer, 
+    PasswordResetConfirmSerializer
+)
 from .jwt_serializers import EmailTokenObtainPairSerializer
 from .jwt_email_token import UserEmailTokenObtainSerializer
-from rest_framework.views import APIView
-import logging
 
+import os
+import uuid
+import logging
+import requests
+
+# Configure logging
+logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
 
-@swagger_auto_schema(method='post', request_body=LoginSerializer, responses={200: 'Login successful', 400: 'Invalid email or password'}, tags=['users'])
+@swagger_auto_schema(
+    method='post', 
+    request_body=LoginSerializer, 
+    responses={
+        200: openapi.Response(
+            description='Login successful',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(type=openapi.TYPE_STRING),
+                    'user': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'username': openapi.Schema(type=openapi.TYPE_STRING),
+                            'email': openapi.Schema(type=openapi.TYPE_STRING),
+                            'user_type': openapi.Schema(type=openapi.TYPE_STRING),
+                        }
+                    ),
+                    'tokens': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'access': openapi.Schema(
+                                type=openapi.TYPE_STRING,
+                                description='JWT access token (valid for 15 minutes)'
+                            ),
+                            'refresh': openapi.Schema(
+                                type=openapi.TYPE_STRING,
+                                description='JWT refresh token (valid for 24 hours)'
+                            ),
+                        }
+                    ),
+                }
+            )
+        ), 
+        400: 'Invalid email or password'
+    }, 
+    tags=['users']
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_user(request):
     """
-    User login endpoint. Accepts email and password, returns token and user info on success.
+    User login endpoint. 
+    Accepts email and password, returns:
+    - User information
+    - JWT access token (valid for 15 minutes)
+    - JWT refresh token (valid for 24 hours)
+    
+    Use the access token in the Authorization header as:
+    Authorization: Bearer <access_token>
+    
+    When the access token expires, use the refresh token to get a new one
+    via the /api/users/jwt/refresh/ endpoint.
     """
     serializer = LoginSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     email = serializer.validated_data['email']
     password = serializer.validated_data['password']
 
@@ -48,50 +107,132 @@ def login_user(request):
     if not user.check_password(password):
         return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
 
-    token, _ = Token.objects.get_or_create(user=user)
+    # Generate JWT tokens
+    refresh = EmailTokenObtainPairSerializer.get_token(user)
+    
     return Response({
         "message": "Login successful",
-        "user": {"id": str(user.id), "username": user.username, "email": user.email},
-        "token": token.key
+        "user": {
+            "id": str(user.id), 
+            "username": user.username, 
+            "email": user.email,
+            "user_type": user.user_type
+        },
+        "tokens": {
+            "access": str(refresh.access_token),
+            "refresh": str(refresh)
+        }
     }, status=status.HTTP_200_OK)
 
 
 
-@swagger_auto_schema(method='post', request_body=RegisterSerializer, responses={201: 'Registration successful', 400: 'Validation error'}, tags=['users'])
+@swagger_auto_schema(
+    method='post',
+    request_body=RegisterSerializer,
+    responses={
+        201: openapi.Response(
+            description='Registration successful',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(type=openapi.TYPE_STRING),
+                    'user': openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            'id': openapi.Schema(type=openapi.TYPE_STRING),
+                            'email': openapi.Schema(type=openapi.TYPE_STRING),
+                            'user_type': openapi.Schema(type=openapi.TYPE_STRING),
+                            'full_name': openapi.Schema(type=openapi.TYPE_STRING),
+                        }
+                    )
+                }
+            )
+        ),
+        400: 'Validation error'
+    },
+    tags=['users']
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register_user(request):
     """
-    User registration endpoint. Accepts name, mobile, email, password, confirmPassword. Returns success message on registration.
+    Unified registration endpoint for both customers and dealers.
     """
+    # Use ModelSerializer for handling file uploads
     serializer = RegisterSerializer(data=request.data)
+    
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    name = serializer.validated_data['name']
-    mobile = serializer.validated_data['mobile']
-    email = serializer.validated_data['email']
-    password = serializer.validated_data['password']
-    confirm_password = serializer.validated_data['confirmPassword']
 
-    if password != confirm_password:
-        return Response({"message": "Passwords do not match"}, status=status.HTTP_400_BAD_REQUEST)
-
-    if User.objects.filter(email=email).exists():
-        return Response({"message": "Email already registered"}, status=status.HTTP_400_BAD_REQUEST)
-
-    if User.objects.filter(mobile=mobile).exists():
-        return Response({"message": "Mobile already registered"}, status=status.HTTP_400_BAD_REQUEST)
-
-    user = User(username=name, mobile=mobile, email=email)
-    user.set_password(password)
-    user.save()
-    return Response({"message": "Registration successful!", "user": {"id": str(user.id), "username": user.username, "email": user.email}}, status=status.HTTP_201_CREATED)
+    try:
+        # Use the serializer to create the user
+        user = serializer.save()
+        
+        # Generate the full name for response
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        
+        # Return success response with user details
+        return Response({
+            "message": f"{user.get_user_type_display()} registration successful!",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "user_type": user.user_type,
+                "full_name": full_name
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        # Log the error for debugging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Registration failed: {str(e)}")
+        
+        # Return error response
+        return Response({
+            "message": "Registration failed",
+            "error": str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 # Password Reset Request - PUBLIC
-@swagger_auto_schema(method='post', request_body=PasswordResetRequestSerializer, tags=['users'])
+@swagger_auto_schema(
+    method='post',
+    request_body=PasswordResetRequestSerializer,
+    responses={
+        200: openapi.Response(
+            description='Password reset link sent successfully',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        description='Success message'
+                    )
+                }
+            )
+        ),
+        400: openapi.Response(
+            description='Bad request',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        description='Error message'
+                    )
+                }
+            )
+        )
+    },
+    operation_description='Request a password reset link. An email will be sent with reset instructions.',
+    tags=['users']
+)
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_password_reset(request):
+    """
+    Request a password reset link.
+    Sends an email with password reset instructions if the email exists in the system.
+    """
     email = request.data.get('email')
     if not email:
         return Response({"message": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -134,7 +275,51 @@ def request_password_reset(request):
     return Response({"message": "Password reset link sent to email."}, status=status.HTTP_200_OK)
 
 # Password Reset Confirm - PUBLIC
-@swagger_auto_schema(methods=['get', 'post'], tags=['users'])
+@swagger_auto_schema(
+    methods=['post'],
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=['password', 'confirmPassword'],
+        properties={
+            'password': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description='New password (must meet complexity requirements)'
+            ),
+            'confirmPassword': openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description='Confirm new password'
+            )
+        }
+    ),
+    responses={
+        200: openapi.Response(
+            description='Password reset successful',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        description='Success message'
+                    )
+                }
+            )
+        ),
+        400: openapi.Response(
+            description='Bad request',
+            schema=openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'message': openapi.Schema(
+                        type=openapi.TYPE_STRING,
+                        description='Error message'
+                    )
+                }
+            )
+        )
+    },
+    operation_description='Reset password using the token received via email.',
+    tags=['users']
+)
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
 def reset_password(request, token):
