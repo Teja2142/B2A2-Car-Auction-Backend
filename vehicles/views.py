@@ -2,8 +2,15 @@ from rest_framework import viewsets, permissions, filters
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.exceptions import PermissionDenied
 from .models import Vehicle, VehicleImage
-from .serializers import VehicleSerializer, VehicleImageSerializer, MultipleVehicleImageUploadSerializer
+from .serializers import (
+    VehicleSerializer,
+    VehicleImageSerializer,
+    MultipleVehicleImageUploadSerializer,
+    PartialVehicleSerializer,
+    PartialVehicleImageSerializer
+)
 from drf_yasg.utils import swagger_auto_schema
+from utils.swagger import safe_generate_form_parameters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -36,11 +43,29 @@ class VehicleViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Create vehicle.",
+        operation_summary="Create Vehicle",
+        # We provide manual form parameters; disable automatic body introspection to avoid
+        # drf-yasg attempting to build a JSON schema containing File/Image fields.
+        manual_parameters=safe_generate_form_parameters(VehicleSerializer),
+        request_body=None,
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={201: openapi.Response('Created'), 400: 'Bad data'}
+    )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Partial update vehicle.",
+        operation_summary="Partial Update Vehicle",
+        manual_parameters=safe_generate_form_parameters(PartialVehicleSerializer),
+        request_body=None,
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Bad data', 403: 'Forbidden', 404: 'Not found'}
+    )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
@@ -52,32 +77,43 @@ class VehicleViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Full update vehicle (all required fields must be provided).",
+        operation_summary="Update Vehicle",
+        manual_parameters=safe_generate_form_parameters(VehicleSerializer),
+        request_body=None,
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Bad data', 403: 'Forbidden', 404: 'Not found'}
+    )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
-        if hasattr(self.request.user, 'dealer_profile'):
-            serializer.save(dealer=self.request.user.dealer_profile)
+        user = self.request.user
+        if user.is_authenticated and getattr(user, 'user_type', None) == 'dealer':
+            serializer.save(dealer=user)
         else:
+            # Non-dealers can create without dealer linkage (or raise if not allowed)
             serializer.save()
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_authenticated and hasattr(user, 'dealer_profile') and user.dealer_profile:
-            return Vehicle.objects.filter(dealer=user.dealer_profile)
+        if user.is_authenticated and getattr(user, 'user_type', None) == 'dealer':
+            return Vehicle.objects.filter(dealer=user)
         return Vehicle.objects.all()
 
     def perform_update(self, serializer):
-        # Only allow dealer to update their own vehicle
-        if self.get_object().dealer == self.request.user.dealer_profile:
+        # Only dealer owner can update
+        instance = self.get_object()
+        if instance.dealer and instance.dealer == self.request.user:
             serializer.save()
         else:
             raise PermissionDenied('You do not have permission to update this vehicle.')
 
     def perform_destroy(self, instance):
-        # Only allow dealer to delete their own vehicle
-        if instance.dealer == self.request.user.dealer_profile:
+        # Only dealer owner can delete
+        if instance.dealer and instance.dealer == self.request.user:
             instance.delete()
         else:
             raise PermissionDenied('You do not have permission to delete this vehicle.')
@@ -95,15 +131,39 @@ class VehicleImageViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Create vehicle image (multipart form).",
+        operation_summary="Create Vehicle Image",
+        manual_parameters=safe_generate_form_parameters(VehicleImageSerializer),
+        request_body=None,
+        consumes=['multipart/form-data'],
+        responses={201: openapi.Response('Created'), 400: 'Bad data'}
+    )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Update vehicle image (replace file or change vehicle).",
+        operation_summary="Update Vehicle Image",
+        manual_parameters=safe_generate_form_parameters(VehicleImageSerializer),
+        request_body=None,
+        consumes=['multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Bad data'}
+    )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['vehicles'])
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Partial update vehicle image (only send fields to change).",
+        operation_summary="Partial Update Vehicle Image",
+        manual_parameters=safe_generate_form_parameters(PartialVehicleImageSerializer),
+        request_body=None,
+        consumes=['multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Bad data'}
+    )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
@@ -111,8 +171,19 @@ class VehicleImageViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
-    @action(detail=False, methods=['post'], url_path='bulk-upload', serializer_class=MultipleVehicleImageUploadSerializer)
-    @swagger_auto_schema(tags=['vehicles'], operation_description="Upload multiple images for a vehicle.")
+    # NOTE: We intentionally omit serializer_class here to prevent drf_yasg from auto-introspecting
+    # the MultipleVehicleImageUploadSerializer (ListField of ImageField) which triggers a FileField
+    # schema error. We supply manual_parameters + request_body=None in the swagger decorator instead.
+    @action(detail=False, methods=['post'], url_path='bulk-upload')
+    @swagger_auto_schema(
+        tags=['vehicles'],
+        operation_description="Upload multiple images for a vehicle in one request.",
+        operation_summary="Bulk Upload Vehicle Images",
+        manual_parameters=safe_generate_form_parameters(MultipleVehicleImageUploadSerializer),
+        request_body=None,
+        consumes=['multipart/form-data'],
+        responses={201: openapi.Response('Images Uploaded'), 400: 'Bad data'}
+    )
     def bulk_upload(self, request):
         serializer = MultipleVehicleImageUploadSerializer(data=request.data)
         if serializer.is_valid():

@@ -46,6 +46,9 @@ class User(AbstractUser):
         unique=True,
         help_text="Phone number must be entered in the format: '+999999999'"
     )
+    # Make email unique to prevent MultipleObjectsReturned during authentication flows.
+    # AbstractUser already has a non-unique email; we override it here.
+    email = models.EmailField(unique=True, blank=False, null=False, help_text="Unique email used for login")
     country = models.CharField(
         max_length=100,
         null=True,

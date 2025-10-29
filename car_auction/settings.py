@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     'auction',
     'users',
     'vehicles',
-    'dealers',
     'rest_framework',
     'drf_yasg',  # For API documentation
 ]
@@ -192,12 +191,9 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SCHEMA_PATH_PREFIX_TRIM': True,
     'SCHEMA_PATH_PREFIX': '/api/',  
     'TAGS': [
         {'name': 'users', 'description': 'User and authentication endpoints'},
-        {'name': 'dealers', 'description': 'Dealer endpoints'},
         {'name': 'vehicles', 'description': 'Vehicle endpoints'},
         {'name': 'auction', 'description': 'Auction and bid endpoints'},
     ],
@@ -213,6 +209,20 @@ SWAGGER_SETTINGS = {
             'description': 'Format: Bearer <your-access-token>',
         }
     },
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True,
+    'SUPPORTED_SUBMIT_METHODS': [
+        'get',
+        'post',
+        'put',
+        'delete',
+        'patch'
+    ],
+    'OPERATIONS_SORTER': 'alpha',
+    'TAGS_SORTER': 'alpha',
+    'DOC_EXPANSION': 'none',
+    'DEEP_LINKING': True,
+    'SHOW_EXTENSIONS': True,
 }
 
 logging.basicConfig(level=logging.INFO)

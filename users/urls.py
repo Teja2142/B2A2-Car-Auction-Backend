@@ -1,7 +1,17 @@
-from django.urls import path
-from .views import register_user, login_user, request_password_reset, reset_password
-from .views import UserEmailTokenObtainView, SwaggerTokenObtainPairView, SwaggerTokenRefreshView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import (
+    register_user,
+    login_user,
+    request_password_reset,
+    reset_password,
+    UserEmailTokenObtainView,
+    SwaggerTokenRefreshView,
+    UserViewSet,
+)
+
+router = DefaultRouter()
+router.register(r'accounts', UserViewSet, basename='user')
 
 urlpatterns = [
     path('register/', register_user, name='register_user'),
@@ -10,4 +20,5 @@ urlpatterns = [
     path('password-reset/<uuid:token>/', reset_password, name='reset_password'),
     path('jwt/token/', UserEmailTokenObtainView.as_view(), name='token_obtain_pair'),
     path('jwt/refresh/', SwaggerTokenRefreshView.as_view(), name='token_refresh'),
+    path('', include(router.urls)),
 ]
