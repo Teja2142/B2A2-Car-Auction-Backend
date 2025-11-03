@@ -11,6 +11,7 @@ User = get_user_model()
 class Auction(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vehicle = models.OneToOneField(Vehicle, on_delete=models.CASCADE)
+    title = models.CharField(max_length=255, help_text="Enter a descriptive title for the auction", blank=True)
     starting_price = models.DecimalField(max_digits=12, decimal_places=2)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()

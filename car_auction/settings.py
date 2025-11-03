@@ -138,7 +138,7 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
+ALLOWED_HOSTS = ['*','b2a2cars.com','b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'chaitusrvy1@gmail.com')
