@@ -1,3 +1,26 @@
+## User Profile Management (Industry Standard)
+
+### Admin CRUD
+- Admins can create, update, delete, and list any user via `/users/accounts/` endpoints (admin only).
+
+### Self-Service Profile (Dealers/Customers)
+- Authenticated users can view and update their own profile via:
+	- `GET    /api/users/profile/`   (view your profile)
+	- `PUT    /api/users/profile/`   (update all fields)
+	- `PATCH  /api/users/profile/`   (update some fields)
+- No admin needed for these actions.
+- Users cannot set staff/superuser fields or update other users.
+
+### Why?
+- This matches real-world car auction and e-commerce platforms.
+- Improves user experience and security.
+
+### Example Usage
+1. Login and get your JWT token.
+2. Use `/api/users/profile/` with your token to view or update your info.
+
+### API Docs
+- All endpoints are documented in Swagger UI (`/api/docs/`).
 # 🚗 B2A2 Car Auction Backend
 
 Backend for **B2A2 Car Auction** – Django REST API for vehicles, auctions, bids, and unified user accounts (regular users, dealers, admins) with form-based Swagger docs.

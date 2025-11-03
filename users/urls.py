@@ -8,6 +8,7 @@ from .views import (
     UserEmailTokenObtainView,
     SwaggerTokenRefreshView,
     UserViewSet,
+    UserProfileView,
 )
 
 router = DefaultRouter()
@@ -20,5 +21,6 @@ urlpatterns = [
     path('password-reset/<uuid:token>/', reset_password, name='reset_password'),
     path('jwt/token/', UserEmailTokenObtainView.as_view(), name='token_obtain_pair'),
     path('jwt/refresh/', SwaggerTokenRefreshView.as_view(), name='token_refresh'),
+    path('profile/', UserProfileView.as_view(), name='user_profile'),
     path('', include(router.urls)),
 ]

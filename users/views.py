@@ -4,8 +4,9 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import render
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
 from rest_framework import status
 
@@ -21,6 +22,9 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .jwt_serializers import EmailTokenObtainPairSerializer
 from .jwt_email_token import UserEmailTokenObtainSerializer
+from .serializers import UserProfileUpdateSerializer, PartialUserProfileUpdateSerializer
+
+
 
 @swagger_auto_schema(
     method='post',
@@ -33,6 +37,7 @@ from .jwt_email_token import UserEmailTokenObtainSerializer
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def login_user(request):
     serializer = LoginSerializer(data=request.data)
     if not serializer.is_valid():
@@ -73,6 +78,7 @@ def login_user(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def register_user(request):
     """
     Unified registration endpoint for both customers and dealers.
@@ -124,11 +130,13 @@ def register_user(request):
             examples={'example': 'user@example.com'}
         )
     ],
+    request_body=None,
     consumes=['application/x-www-form-urlencoded','multipart/form-data'],
     tags=['users']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def request_password_reset(request):
     """
     Request a password reset link.
@@ -182,12 +190,14 @@ def request_password_reset(request):
         openapi.Parameter('password', openapi.IN_FORM, required=True, type=openapi.TYPE_STRING, description='New password (must meet complexity requirements)'),
         openapi.Parameter('confirmPassword', openapi.IN_FORM, required=True, type=openapi.TYPE_STRING, description='Confirm new password')
     ],
+    request_body=None,
     consumes=['application/x-www-form-urlencoded','multipart/form-data'],
     operation_description='Reset password using the token received via email.',
     tags=['users']
 )
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def reset_password(request, token):
     """
     Handle password reset via token.
@@ -386,3 +396,48 @@ class UserViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(operation_summary="Delete User", tags=['users'])
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
+
+
+
+
+# --- Self-Service Profile Endpoint ---
+class UserProfileView(APIView):
+    """
+    Allows an authenticated user (dealer or customer) to view and update their own profile.
+    GET: Retrieve your profile.
+    PUT/PATCH: Update your profile fields (no admin needed).
+    """
+    permission_classes = [IsAuthenticated]
+
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @swagger_auto_schema(responses={200: UserProfileUpdateSerializer}, operation_summary="Get your profile", tags=["users"])
+    def get(self, request):
+        serializer = UserProfileUpdateSerializer(request.user)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=safe_generate_form_parameters(UserProfileUpdateSerializer),
+        request_body=None,
+        responses={200: UserProfileUpdateSerializer},
+        operation_summary="Update your profile (full)",
+        tags=["users"]
+    )
+    def put(self, request):
+        serializer = UserProfileUpdateSerializer(request.user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        manual_parameters=safe_generate_form_parameters(PartialUserProfileUpdateSerializer),
+        request_body=None,
+        responses={200: UserProfileUpdateSerializer},
+        operation_summary="Update your profile (partial)",
+        tags=["users"]
+    )
+    def patch(self, request):
+        serializer = PartialUserProfileUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
