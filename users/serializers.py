@@ -1,6 +1,11 @@
 from rest_framework import serializers
 from .models import PasswordResetToken, User
 
+# Constants for repeated labels and placeholders
+EMAIL_LABEL = "Email Address"
+EMAIL_PLACEHOLDER = 'user@example.com'
+MOBILE_PLACEHOLDER = '+1234567890'
+
 class UserSerializer(serializers.ModelSerializer):
     """
     Serializer for user profile display and updates
@@ -16,13 +21,13 @@ class UserSerializer(serializers.ModelSerializer):
     )
     email = serializers.EmailField(
         help_text="User's email address",
-        label="Email Address",
-        style={'placeholder': 'user@example.com'}
+        label=EMAIL_LABEL,
+        style={'placeholder': EMAIL_PLACEHOLDER}
     )
     mobile = serializers.CharField(
         help_text="User's mobile/phone number",
         label="Mobile Number",
-        style={'placeholder': '+1234567890'},
+        style={'placeholder': MOBILE_PLACEHOLDER},
         max_length=15
     )
     first_name = serializers.CharField(
@@ -100,15 +105,15 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     email = serializers.EmailField(
         help_text="Valid email address (must be unique)",
-        label="Email Address",
-        style={'placeholder': 'user@example.com'}
+        label=EMAIL_LABEL,
+        style={'placeholder': EMAIL_PLACEHOLDER}
     )
     phone = serializers.CharField(
         source='mobile',
         max_length=15,
         help_text="Phone number up to 15 digits",
         label="Phone Number",
-        style={'placeholder': '+1234567890'}
+        style={'placeholder': MOBILE_PLACEHOLDER}
     )
     password = serializers.CharField(
         write_only=True,

@@ -345,6 +345,7 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
     serializer_class = UserSerializer
     lookup_field = 'id'
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_serializer_class(self):
         from .serializers import RegisterSerializer, AdminUserCreateSerializer  # local import to avoid circular issues
@@ -362,9 +363,9 @@ class UserViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_summary="Create User (Admin)",
         tags=['users'],
-        manual_parameters=safe_generate_form_parameters(AdminUserCreateSerializer),
-        request_body=None,
-        consumes=['application/x-www-form-urlencoded','multipart/form-data']
+        request_body=AdminUserCreateSerializer,
+        responses={201: UserSerializer},
+        consumes=['multipart/form-data']
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
@@ -376,9 +377,9 @@ class UserViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_summary="Update User (Full)",
         tags=['users'],
-        manual_parameters=safe_generate_form_parameters(UserProfileUpdateSerializer),
-        request_body=None,
-        consumes=['application/x-www-form-urlencoded','multipart/form-data']
+        request_body=UserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        consumes=['multipart/form-data']
     )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
@@ -386,9 +387,9 @@ class UserViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_summary="Partial Update User",
         tags=['users'],
-        manual_parameters=safe_generate_form_parameters(PartialUserProfileUpdateSerializer),
-        request_body=None,
-        consumes=['application/x-www-form-urlencoded','multipart/form-data']
+        request_body=PartialUserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        consumes=['multipart/form-data']
     )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
@@ -417,11 +418,11 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
     @swagger_auto_schema(
-        manual_parameters=safe_generate_form_parameters(UserProfileUpdateSerializer),
-        request_body=None,
+        request_body=UserProfileUpdateSerializer,
         responses={200: UserProfileUpdateSerializer},
         operation_summary="Update your profile (full)",
-        tags=["users"]
+        tags=["users"],
+        consumes=['multipart/form-data']
     )
     def put(self, request):
         serializer = UserProfileUpdateSerializer(request.user, data=request.data)
@@ -430,11 +431,11 @@ class UserProfileView(APIView):
         return Response(serializer.data)
 
     @swagger_auto_schema(
-        manual_parameters=safe_generate_form_parameters(PartialUserProfileUpdateSerializer),
-        request_body=None,
+        request_body=PartialUserProfileUpdateSerializer,
         responses={200: UserProfileUpdateSerializer},
         operation_summary="Update your profile (partial)",
-        tags=["users"]
+        tags=["users"],
+        consumes=['multipart/form-data']
     )
     def patch(self, request):
         serializer = PartialUserProfileUpdateSerializer(request.user, data=request.data, partial=True)
