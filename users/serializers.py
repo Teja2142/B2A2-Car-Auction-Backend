@@ -45,8 +45,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'mobile', 'first_name', 'last_name', 'full_name']
-        read_only_fields = ['id', 'username']
+        fields = ['id', 'username', 'email', 'mobile', 'first_name', 'last_name', 'full_name', 'user_type']
+        read_only_fields = ['id', 'username', 'user_type']
 
     def get_full_name(self, obj):
         return f"{obj.first_name} {obj.last_name}".strip()
@@ -417,13 +417,17 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
         help_text="Upload your profile picture (optional, max 2MB)",
         label="Profile Picture"
     )
+    user_type = serializers.CharField(
+        read_only=True,
+        help_text="User type (dealer or customer)"
+    )
     
     class Meta:
         model = User
         fields = [
             'first_name', 'last_name', 'email', 'mobile', 'country', 'state',
             'address', 'zip_code', 'dob', 'gender', 'language', 'currency',
-            'profile_pic'
+            'profile_pic', 'user_type'
         ]
 
     def validate_email(self, value):
