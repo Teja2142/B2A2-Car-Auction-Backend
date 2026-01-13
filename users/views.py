@@ -4,156 +4,81 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.shortcuts import render
 
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, parser_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.response import Response
-from rest_framework import status, serializers
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework import status
 
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
-
+from utils.swagger import safe_generate_form_parameters, generate_form_parameters
+from .serializers import RegisterSerializer, LoginSerializer, AdminUserCreateSerializer
 from .models import User
-from .serializers import (
-    RegisterSerializer, 
-    LoginSerializer, 
-    PasswordResetRequestSerializer, 
-    PasswordResetConfirmSerializer
-)
+import logging, uuid, requests, os
+from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.authtoken.models import Token
+from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .jwt_serializers import EmailTokenObtainPairSerializer
 from .jwt_email_token import UserEmailTokenObtainSerializer
-
-import os
-import uuid
-import logging
-import requests
-
-# Configure logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
-
-
-
-@swagger_auto_schema(
-    method='post', 
-    request_body=LoginSerializer, 
-    responses={
-        200: openapi.Response(
-            description='Login successful',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(type=openapi.TYPE_STRING),
-                    'user': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'id': openapi.Schema(type=openapi.TYPE_STRING),
-                            'username': openapi.Schema(type=openapi.TYPE_STRING),
-                            'email': openapi.Schema(type=openapi.TYPE_STRING),
-                            'user_type': openapi.Schema(type=openapi.TYPE_STRING),
-                        }
-                    ),
-                    'tokens': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'access': openapi.Schema(
-                                type=openapi.TYPE_STRING,
-                                description='JWT access token (valid for 15 minutes)'
-                            ),
-                            'refresh': openapi.Schema(
-                                type=openapi.TYPE_STRING,
-                                description='JWT refresh token (valid for 24 hours)'
-                            ),
-                        }
-                    ),
-                }
-            )
-        ), 
-        400: 'Invalid email or password'
-    }, 
-    tags=['users']
-)
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def login_user(request):
-    """
-    User login endpoint. 
-    Accepts email and password, returns:
-    - User information
-    - JWT access token (valid for 15 minutes)
-    - JWT refresh token (valid for 24 hours)
-    
-    Use the access token in the Authorization header as:
-    Authorization: Bearer <access_token>
-    
-    When the access token expires, use the refresh token to get a new one
-    via the /api/users/jwt/refresh/ endpoint.
-    """
-    serializer = LoginSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    email = serializer.validated_data['email']
-    password = serializer.validated_data['password']
-
-    try:
-        user = User.objects.get(email=email)
-    except User.DoesNotExist:
-        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not user.check_password(password):
-        return Response({"message": "Invalid email or password"}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Generate JWT tokens
-    refresh = EmailTokenObtainPairSerializer.get_token(user)
-    
-    return Response({
-        "message": "Login successful",
-        "user": {
-            "id": str(user.id), 
-            "username": user.username, 
-            "email": user.email,
-            "user_type": user.user_type
-        },
-        "tokens": {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh)
-        }
-    }, status=status.HTTP_200_OK)
+from .serializers import UserProfileUpdateSerializer, PartialUserProfileUpdateSerializer
 
 
 
 @swagger_auto_schema(
     method='post',
-    request_body=RegisterSerializer,
-    responses={
-        201: openapi.Response(
-            description='Registration successful',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(type=openapi.TYPE_STRING),
-                    'user': openapi.Schema(
-                        type=openapi.TYPE_OBJECT,
-                        properties={
-                            'id': openapi.Schema(type=openapi.TYPE_STRING),
-                            'email': openapi.Schema(type=openapi.TYPE_STRING),
-                            'user_type': openapi.Schema(type=openapi.TYPE_STRING),
-                            'full_name': openapi.Schema(type=openapi.TYPE_STRING),
-                        }
-                    )
-                }
-            )
-        ),
-        400: 'Validation error'
-    },
+    operation_description="User login with email & password.",
+    operation_summary="User Login",
+    manual_parameters=safe_generate_form_parameters(LoginSerializer),
+    request_body=None,
+    consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
     tags=['users']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+def login_user(request):
+    serializer = LoginSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    email = serializer.validated_data['email']
+    password = serializer.validated_data['password']
+    # Use filter rather than get to avoid MultipleObjectsReturned if legacy duplicates exist
+    users_qs = User.objects.filter(email=email)
+    if not users_qs.exists():
+        return Response({'message': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+    user = users_qs.order_by('-date_joined').first()
+    if not user.check_password(password):
+        return Response({'message': 'Invalid credentials'}, status=status.HTTP_400_BAD_REQUEST)
+    from .jwt_serializers import EmailTokenObtainPairSerializer
+    refresh = EmailTokenObtainPairSerializer.get_token(user)
+    return Response({
+        'message': 'Login successful',
+        'user': {
+            'id': str(user.id),
+            'email': user.email,
+            'user_type': user.user_type
+        },
+        'tokens': {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh)
+        }
+    })
+
+@swagger_auto_schema(
+    method='post',
+    operation_description="Register a new user (customer or dealer).",
+    operation_summary="User Registration",
+    manual_parameters=safe_generate_form_parameters(RegisterSerializer),
+    request_body=None,
+    consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+    responses={201: openapi.Response(description='Registration successful'), 400: 'Validation error'},
+    tags=['users']
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def register_user(request):
     """
     Unified registration endpoint for both customers and dealers.
@@ -196,38 +121,22 @@ def register_user(request):
 # Password Reset Request - PUBLIC
 @swagger_auto_schema(
     method='post',
-    request_body=PasswordResetRequestSerializer,
-    responses={
-        200: openapi.Response(
-            description='Password reset link sent successfully',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        description='Success message'
-                    )
-                }
-            )
-        ),
-        400: openapi.Response(
-            description='Bad request',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        description='Error message'
-                    )
-                }
-            )
+    operation_description="Request password reset by providing your email address. You will receive a reset link.",
+    operation_summary="Password Reset Request Form",
+    manual_parameters=[
+        openapi.Parameter(
+            'email', openapi.IN_FORM, required=True, type=openapi.TYPE_STRING,
+            description='Enter your registered email address', format='email',
+            examples={'example': 'user@example.com'}
         )
-    },
-    operation_description='Request a password reset link. An email will be sent with reset instructions.',
+    ],
+    request_body=None,
+    consumes=['application/x-www-form-urlencoded','multipart/form-data'],
     tags=['users']
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def request_password_reset(request):
     """
     Request a password reset link.
@@ -277,51 +186,18 @@ def request_password_reset(request):
 # Password Reset Confirm - PUBLIC
 @swagger_auto_schema(
     methods=['post'],
-    request_body=openapi.Schema(
-        type=openapi.TYPE_OBJECT,
-        required=['password', 'confirmPassword'],
-        properties={
-            'password': openapi.Schema(
-                type=openapi.TYPE_STRING,
-                description='New password (must meet complexity requirements)'
-            ),
-            'confirmPassword': openapi.Schema(
-                type=openapi.TYPE_STRING,
-                description='Confirm new password'
-            )
-        }
-    ),
-    responses={
-        200: openapi.Response(
-            description='Password reset successful',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        description='Success message'
-                    )
-                }
-            )
-        ),
-        400: openapi.Response(
-            description='Bad request',
-            schema=openapi.Schema(
-                type=openapi.TYPE_OBJECT,
-                properties={
-                    'message': openapi.Schema(
-                        type=openapi.TYPE_STRING,
-                        description='Error message'
-                    )
-                }
-            )
-        )
-    },
+    manual_parameters=[
+        openapi.Parameter('password', openapi.IN_FORM, required=True, type=openapi.TYPE_STRING, description='New password (must meet complexity requirements)'),
+        openapi.Parameter('confirmPassword', openapi.IN_FORM, required=True, type=openapi.TYPE_STRING, description='Confirm new password')
+    ],
+    request_body=None,
+    consumes=['application/x-www-form-urlencoded','multipart/form-data'],
     operation_description='Reset password using the token received via email.',
     tags=['users']
 )
 @api_view(['GET', 'POST'])
 @permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
 def reset_password(request, token):
     """
     Handle password reset via token.
@@ -378,16 +254,15 @@ def send_reset_pswd_link_message(reset_link, user):
 
 
 class CustomObtainAuthToken(ObtainAuthToken):
+    # Explicitly allow unauthenticated access; global DEFAULT_PERMISSION_CLASSES enforces IsAuthenticated otherwise.
+    permission_classes = [AllowAny]
     @swagger_auto_schema(
         operation_description="Obtain JWT token by providing email and password.",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['email', 'password'],
-            properties={
-                'email': openapi.Schema(type=openapi.TYPE_STRING, format='email'),
-                'password': openapi.Schema(type=openapi.TYPE_STRING, format='password'),
-            },
-        ),
+        manual_parameters=[
+            openapi.Parameter('email', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='Email address used to login', format='email'),
+            openapi.Parameter('password', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='User password', format='password')
+        ],
+        consumes=['application/x-www-form-urlencoded','multipart/form-data'],
         responses={200: openapi.Response('JWT token', openapi.Schema(type=openapi.TYPE_OBJECT, properties={'token': openapi.Schema(type=openapi.TYPE_STRING)})), 400: 'Invalid email or password'},
         tags=['users']
     )
@@ -406,33 +281,31 @@ class CustomObtainAuthToken(ObtainAuthToken):
 
 class SwaggerTokenObtainPairView(TokenObtainPairView):
     serializer_class = EmailTokenObtainPairSerializer
+    # Ensure this remains publicly accessible for login
+    permission_classes = [AllowAny]
     @swagger_auto_schema(
         operation_description="Obtain JWT access and refresh tokens.",
         tags=['users'],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['email', 'password'],
-            properties={
-                'email': openapi.Schema(type=openapi.TYPE_STRING, format='email'),
-                'password': openapi.Schema(type=openapi.TYPE_STRING, format='password'),
-            },
-        ),
+        manual_parameters=[
+            openapi.Parameter('email', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='Email address', format='email'),
+            openapi.Parameter('password', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='Password', format='password')
+        ],
+        consumes=['application/x-www-form-urlencoded','multipart/form-data'],
         responses={200: openapi.Response('JWT token pair', openapi.Schema(type=openapi.TYPE_OBJECT, properties={'access': openapi.Schema(type=openapi.TYPE_STRING), 'refresh': openapi.Schema(type=openapi.TYPE_STRING), 'user': openapi.Schema(type=openapi.TYPE_OBJECT)})), 401: 'Unauthorized'},
     )
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
 class SwaggerTokenRefreshView(TokenRefreshView):
+    # Refresh requires only a valid refresh token, not existing session auth
+    permission_classes = [AllowAny]
     @swagger_auto_schema(
         operation_description="Refresh JWT access token.",
         tags=['users'],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['refresh'],
-            properties={
-                'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-            },
-        ),
+        manual_parameters=[
+            openapi.Parameter('refresh', openapi.IN_FORM, type=openapi.TYPE_STRING, required=True, description='Refresh token')
+        ],
+        consumes=['application/x-www-form-urlencoded','multipart/form-data'],
         responses={200: openapi.Response('JWT access token', openapi.Schema(type=openapi.TYPE_OBJECT, properties={'access': openapi.Schema(type=openapi.TYPE_STRING)})), 401: 'Unauthorized'},
     )
     def post(self, request, *args, **kwargs):
@@ -443,7 +316,8 @@ class UserEmailTokenObtainView(APIView):
     @swagger_auto_schema(
         operation_description="Obtain JWT access and refresh tokens using email and password.",
         tags=['users'],
-        request_body=UserEmailTokenObtainSerializer,
+        manual_parameters=safe_generate_form_parameters(UserEmailTokenObtainSerializer),
+        consumes=['application/x-www-form-urlencoded','multipart/form-data'],
         responses={200: openapi.Response('JWT token pair', openapi.Schema(type=openapi.TYPE_OBJECT, properties={
             'access': openapi.Schema(type=openapi.TYPE_STRING),
             'refresh': openapi.Schema(type=openapi.TYPE_STRING),
@@ -454,3 +328,117 @@ class UserEmailTokenObtainView(APIView):
         serializer = UserEmailTokenObtainSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=200)
+
+# ---------------------------
+# User CRUD ViewSet (Admin)
+# ---------------------------
+from rest_framework import viewsets, permissions
+from .serializers import UserSerializer, UserProfileUpdateSerializer, PartialUserProfileUpdateSerializer
+
+class UserViewSet(viewsets.ModelViewSet):
+    """Admin CRUD operations for users exposed with form-friendly Swagger parameters.
+
+    Uses different serializers for create (registration), update (profile update) and read (standard user).
+    Only admin users can access these endpoints by default.
+    """
+    queryset = User.objects.all().order_by('-date_joined')
+    permission_classes = [permissions.IsAdminUser]
+    serializer_class = UserSerializer
+    lookup_field = 'id'
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_serializer_class(self):
+        from .serializers import RegisterSerializer, AdminUserCreateSerializer  # local import to avoid circular issues
+        if self.action == 'create':
+            # Use admin serializer that can set staff/superuser flags
+            return AdminUserCreateSerializer
+        if self.action in ['update', 'partial_update']:
+            return UserProfileUpdateSerializer
+        return UserSerializer
+
+    @swagger_auto_schema(operation_summary="List Users", tags=['users'])
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Create User (Admin)",
+        tags=['users'],
+        request_body=AdminUserCreateSerializer,
+        responses={201: UserSerializer},
+        consumes=['multipart/form-data']
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    @swagger_auto_schema(operation_summary="Retrieve User", tags=['users'])
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Update User (Full)",
+        tags=['users'],
+        request_body=UserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        consumes=['multipart/form-data']
+    )
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    @swagger_auto_schema(
+        operation_summary="Partial Update User",
+        tags=['users'],
+        request_body=PartialUserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        consumes=['multipart/form-data']
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+
+    @swagger_auto_schema(operation_summary="Delete User", tags=['users'])
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
+
+
+
+
+# --- Self-Service Profile Endpoint ---
+class UserProfileView(APIView):
+    """
+    Allows an authenticated user (dealer or customer) to view and update their own profile.
+    GET: Retrieve your profile.
+    PUT/PATCH: Update your profile fields (no admin needed).
+    """
+    permission_classes = [IsAuthenticated]
+
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @swagger_auto_schema(responses={200: UserProfileUpdateSerializer}, operation_summary="Get your profile", tags=["users"])
+    def get(self, request):
+        serializer = UserProfileUpdateSerializer(request.user)
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        request_body=UserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        operation_summary="Update your profile (full)",
+        tags=["users"],
+        consumes=['multipart/form-data']
+    )
+    def put(self, request):
+        serializer = UserProfileUpdateSerializer(request.user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @swagger_auto_schema(
+        request_body=PartialUserProfileUpdateSerializer,
+        responses={200: UserProfileUpdateSerializer},
+        operation_summary="Update your profile (partial)",
+        tags=["users"],
+        consumes=['multipart/form-data']
+    )
+    def patch(self, request):
+        serializer = PartialUserProfileUpdateSerializer(request.user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

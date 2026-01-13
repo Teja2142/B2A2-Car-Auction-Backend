@@ -3,7 +3,7 @@ from django.core.validators import RegexValidator, MinValueValidator, MaxValueVa
 from django.core.exceptions import ValidationError
 import re
 import uuid
-from dealers.models import DealerProfile
+from django.conf import settings
 
 class Vehicle(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -83,7 +83,8 @@ class Vehicle(models.Model):
     body_style = models.CharField(max_length=20, choices=BODY_STYLE_CHOICES, blank=True)
     registration_number = models.CharField(max_length=20, unique=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")
-    dealer = models.ForeignKey(DealerProfile, related_name="vehicles", on_delete=models.CASCADE, null=True, blank=True)
+    # Final dealer reference (post-migration 0007) points directly to User
+    dealer = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="vehicles", on_delete=models.CASCADE, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
 

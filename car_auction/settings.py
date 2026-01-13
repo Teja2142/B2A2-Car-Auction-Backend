@@ -14,9 +14,70 @@ from pathlib import Path
 import os
 import sys
 import logging
+# Load environment variables from a .env file if present (useful in local dev)
+try:
+    from dotenv import load_dotenv
+    _DOTENV_AVAILABLE = True
+except Exception:
+    _DOTENV_AVAILABLE = False
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# If a .env file exists in BASE_DIR, load it so os.environ picks up values
+def _parse_env_file(path):
+    """Parse a simple KEY=VALUE .env file and return a dict of values.
+
+    Handles surrounding quotes and spaces. Comments (#) and blank lines ignored.
+    """
+    _result = {}
+    try:
+        with open(path, 'r', encoding='utf-8') as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith('#'):
+                    continue
+                if '=' not in _line:
+                    continue
+                _k, _v = _line.split('=', 1)
+                _k = _k.strip()
+                _v = _v.strip()
+                # strip surrounding quotes if present
+                if (_v.startswith('"') and _v.endswith('"')) or (_v.startswith("'") and _v.endswith("'")):
+                    _v = _v[1:-1]
+                _v = _v.strip()
+                _result[_k] = _v
+    except Exception:
+        pass
+    return _result
+
+
+_env_path = BASE_DIR / '.env'
+if _DOTENV_AVAILABLE:
+    # Prefer python-dotenv when available (it sets variables in os.environ)
+    load_dotenv(str(_env_path))
+
+# Always attempt to parse the .env ourselves and apply cleaned values so quoted
+# values are normalized and no surprises occur depending on parser behavior.
+if _env_path.exists():
+    _parsed_env = _parse_env_file(_env_path)
+    if _parsed_env:
+        # Overwrite os.environ with values from .env to ensure the project uses them
+        for _k, _v in _parsed_env.items():
+            os.environ[_k] = _v
+        try:
+            import logging as _logging
+            _logging.getLogger(__name__).info("Loaded .env and set keys: %s", ','.join(sorted(_parsed_env.keys())))
+        except Exception:
+            pass
+
+# Debug: log which DB_ENGINE and DB_HOST were picked up (don't log passwords)
+try:
+    import logging as _logging
+    _logger = _logging.getLogger(__name__)
+    _logger.info("Effective DB_ENGINE=%s DB_HOST=%s", os.environ.get('DB_ENGINE'), os.environ.get('DB_HOST'))
+except Exception:
+    pass
 
 
 # Quick-start development settings - unsuitable for production
@@ -44,7 +105,6 @@ INSTALLED_APPS = [
     'auction',
     'users',
     'vehicles',
-    'dealers',
     'rest_framework',
     'drf_yasg',  # For API documentation
 ]
@@ -84,12 +144,63 @@ WSGI_APPLICATION = 'car_auction.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Choose DB backend via environment variable DB_ENGINE. Use 'mysql' for production/dev with MySQL.
+DB_ENGINE = os.environ.get('DB_ENGINE', 'sqlite')
+
+if DB_ENGINE in ('mysql', 'django.db.backends.mysql'):
+    # Read the host/port from env early so we can test connectivity.
+    _db_host = os.environ.get('DB_HOST', '127.0.0.1')
+    _db_port = int(os.environ.get('DB_PORT', '3306'))
+
+    # If the MySQL host:port is unreachable at startup (common when MySQL isn't
+    # running locally), fall back to sqlite to avoid runtime warnings during
+    # management commands like `makemigrations`.
+    try:
+        import socket
+
+        with socket.create_connection((_db_host, _db_port), timeout=1):
+            _mysql_reachable = True
+    except Exception:
+        _mysql_reachable = False
+
+    if not _mysql_reachable:
+        import logging as _logging
+
+        _logging.getLogger(__name__).warning(
+            "MySQL at %s:%s is unreachable; falling back to sqlite for local dev.",
+            _db_host,
+            _db_port,
+        )
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql',
+                'NAME': os.environ.get('DB_NAME', 'car_auction'),
+                'USER': os.environ.get('DB_USER', 'root'),
+                'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+                'HOST': _db_host,
+                'PORT': str(_db_port),
+                # Recommended options for MySQL
+                'OPTIONS': {
+                    'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+                    # 'charset': 'utf8mb4',
+                },
+                'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', 60)),
+            }
+        }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
     }
-}
 
 
 # Password validation
@@ -139,7 +250,7 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-ALLOWED_HOSTS = ['*', 'b2a2-car-auction.onrender.com','0.0.0.0:8000']
+ALLOWED_HOSTS = ['*','b2a2cars.com','b2a2-car-auction.onrender.com','0.0.0.0:8000']
 
 
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', 'chaitusrvy1@gmail.com')
@@ -148,14 +259,6 @@ EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
 PSWD_RESET_BASE_LINK = os.environ.get('PSWD_RESET_BASE_LINK', "http://127.0.0.1:8000/api/password-reset")
-
-# CSRF_TRUSTED_ORIGINS = [
-#     'https://b2a2-car-auction.onrender.com',
-# ]
-
-# CORS_ALLOWED_ORIGINS = [
-#     'https://b2a2-car-auction.onrender.com',
-# ]
 
 
 CORS_ALLOW_ALL_ORIGINS = True  
@@ -192,19 +295,16 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SCHEMA_PATH_PREFIX_TRIM': True,
     'SCHEMA_PATH_PREFIX': '/api/',  
     'TAGS': [
         {'name': 'users', 'description': 'User and authentication endpoints'},
-        {'name': 'dealers', 'description': 'Dealer endpoints'},
         {'name': 'vehicles', 'description': 'Vehicle endpoints'},
         {'name': 'auction', 'description': 'Auction and bid endpoints'},
     ],
 }
 
 SWAGGER_SETTINGS = {
-    'DEFAULT_AUTO_SCHEMA_CLASS': 'drf_yasg.inspectors.SwaggerAutoSchema',
+    'DEFAULT_AUTO_SCHEMA_CLASS': 'utils.swagger.FormParamFriendlyAutoSchema',
     'SECURITY_DEFINITIONS': {
         'Bearer': {
             'type': 'apiKey',
@@ -213,6 +313,20 @@ SWAGGER_SETTINGS = {
             'description': 'Format: Bearer <your-access-token>',
         }
     },
+    'USE_SESSION_AUTH': False,
+    'JSON_EDITOR': True,
+    'SUPPORTED_SUBMIT_METHODS': [
+        'get',
+        'post',
+        'put',
+        'delete',
+        'patch'
+    ],
+    'OPERATIONS_SORTER': 'alpha',
+    'TAGS_SORTER': 'alpha',
+    'DOC_EXPANSION': 'none',
+    'DEEP_LINKING': True,
+    'SHOW_EXTENSIONS': True,
 }
 
 logging.basicConfig(level=logging.INFO)

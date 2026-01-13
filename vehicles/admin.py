@@ -18,7 +18,7 @@ class VehicleImageInline(admin.TabularInline):
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
     list_display = ('id', 'vin', 'make', 'model', 'year', 'color', 'mileage', 'dealer', 'status', 'starting_price')
-    search_fields = ('vin', 'make', 'model', 'dealer__company_name')
+    search_fields = ('vin', 'make', 'model', 'dealer__username', 'dealer__email')
     list_filter = ('year', 'make', 'model', 'status', 'dealer')
     readonly_fields = ('created_at', 'updated_at')
     inlines = [VehicleImageInline]

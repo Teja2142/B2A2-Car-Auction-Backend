@@ -2,7 +2,6 @@ from django.urls import reverse
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.contrib.auth import get_user_model
-from dealers.models import DealerProfile
 from vehicles.models import Vehicle
 from rest_framework_simplejwt.tokens import RefreshToken
 from io import BytesIO
@@ -15,15 +14,9 @@ class VehicleAPITestCase(APITestCase):
         self.user = User.objects.create_user(
             username='dealeruser', email='dealer@example.com', password='testpass123', mobile='1234567890'
         )
-        self.dealer = DealerProfile.objects.create(
-            user=self.user,
-            company_name='Test Dealer',
-            address='123 Main St',
-            city='Testville',
-            state='TS',
-            country='Testland',
-            phone='555-1234',
-        )
+        # Mark user as dealer
+        self.user.user_type = 'dealer'
+        self.user.save()
         self.token = str(RefreshToken.for_user(self.user).access_token)
         self.vehicle_url = '/api/vehicles/vehicles/'
         self.vehicle = Vehicle.objects.create(
@@ -39,7 +32,7 @@ class VehicleAPITestCase(APITestCase):
             fuel_type='petrol',
             body_style='sedan',
             registration_number='ABC1234',
-            dealer=self.dealer,
+            dealer=self.user,
             starting_price=10000
         )
 
@@ -154,8 +147,13 @@ class VehicleAPITestCase(APITestCase):
     def test_cross_dealer_update_delete(self):
         # Create another dealer and vehicle
         other_user = User.objects.create_user(username='other', email='other@example.com', password='testpass123', mobile='2222222222')
-        other_dealer = DealerProfile.objects.create(user=other_user, company_name='Other Dealer', address='456 St', city='Otherville', state='OS', country='Otherland', phone='555-2222')
-        other_vehicle = Vehicle.objects.create(vin='9HGCM82633A004357', make='Nissan', model='Altima', year=2022, color='Black', mileage=2000, features='', description='', transmission='automatic', fuel_type='petrol', body_style='sedan', registration_number='ALT2022', dealer=other_dealer, starting_price=15000)
+        other_user.user_type = 'dealer'
+        other_user.save()
+        other_vehicle = Vehicle.objects.create(
+            vin='9HGCM82633A004357', make='Nissan', model='Altima', year=2022, color='Black', mileage=2000,
+            features='', description='', transmission='automatic', fuel_type='petrol', body_style='sedan',
+            registration_number='ALT2022', dealer=other_user, starting_price=15000
+        )
         # Try to update/delete as self.user
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.token}')
         update_resp = self.client.patch(f'{self.vehicle_url}{other_vehicle.id}/', {'color': 'Pink'})

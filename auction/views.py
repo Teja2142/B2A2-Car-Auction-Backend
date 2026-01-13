@@ -6,11 +6,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import api_view, permission_classes, parser_classes
 from drf_yasg.utils import swagger_auto_schema
+from utils.swagger import safe_generate_form_parameters
 from drf_yasg import openapi
 from django.utils.timezone import now
 
 from .models import Auction, Bid
-from .serializers import AuctionSerializer, BidSerializer
+from .serializers import AuctionSerializer, BidSerializer, PartialAuctionSerializer, PartialBidSerializer
 
 # Home page (public)
 @api_view(['GET'])
@@ -38,28 +39,26 @@ class AuctionViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     @swagger_auto_schema(
-        operation_description="Create a new auction.",
-        request_body=AuctionSerializer,
-        responses={201: AuctionSerializer, 400: 'Validation error'},
-        manual_parameters=[],
+        operation_description="Create auction.",
+        operation_summary="Create Auction",
+        manual_parameters=safe_generate_form_parameters(AuctionSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={201: openapi.Response('Created'), 400: 'Validation error'},
         tags=['auction']
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
     @swagger_auto_schema(
-        operation_description="Update an auction (partial or full).",
-        request_body=AuctionSerializer,
-        responses={200: AuctionSerializer, 400: 'Validation error'},
-        manual_parameters=[],
+        operation_description="Update auction.",
+        operation_summary="Update Auction",
+        manual_parameters=safe_generate_form_parameters(AuctionSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Validation error'},
         tags=['auction']
     )
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
-
-    @swagger_auto_schema(tags=['auction'])
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
 
     @swagger_auto_schema(
         tags=['auction'],
@@ -97,7 +96,14 @@ class AuctionViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['auction'])
+    @swagger_auto_schema(
+        operation_description="Partially update auction (only send fields you want to change).",
+        operation_summary="Partial Update Auction",
+        manual_parameters=safe_generate_form_parameters(PartialAuctionSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Partially Updated'), 400: 'Validation error'},
+        tags=['auction']
+    )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
@@ -120,20 +126,22 @@ class BidViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     @swagger_auto_schema(
-        operation_description="Create a new bid.",
-        request_body=BidSerializer,
-        responses={201: BidSerializer, 400: 'Validation error'},
-        manual_parameters=[],
+        operation_description="Create bid.",
+        operation_summary="Create Bid",
+        manual_parameters=safe_generate_form_parameters(BidSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={201: openapi.Response('Created'), 400: 'Validation error'},
         tags=['auction']
     )
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
     @swagger_auto_schema(
-        operation_description="Update a bid (partial or full).",
-        request_body=BidSerializer,
-        responses={200: BidSerializer, 400: 'Validation error'},
-        manual_parameters=[],
+        operation_description="Update bid.",
+        operation_summary="Update Bid",
+        manual_parameters=safe_generate_form_parameters(BidSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Updated'), 400: 'Validation error'},
         tags=['auction']
     )
     def update(self, request, *args, **kwargs):
@@ -147,7 +155,14 @@ class BidViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return super().destroy(request, *args, **kwargs)
 
-    @swagger_auto_schema(tags=['auction'])
+    @swagger_auto_schema(
+        operation_description="Partially update bid (only send fields you want to change).",
+        operation_summary="Partial Update Bid",
+        manual_parameters=safe_generate_form_parameters(PartialBidSerializer),
+        consumes=['application/x-www-form-urlencoded', 'multipart/form-data'],
+        responses={200: openapi.Response('Partially Updated'), 400: 'Validation error'},
+        tags=['auction']
+    )
     def partial_update(self, request, *args, **kwargs):
         return super().partial_update(request, *args, **kwargs)
 
@@ -181,9 +196,10 @@ class PlaceBidView(generics.CreateAPIView):
 
     @swagger_auto_schema(
         operation_description="Place a bid on an auction.",
-        request_body=BidSerializer,
-        responses={201: openapi.Response('Bid placed successfully', BidSerializer), 400: 'Validation error'},
-        manual_parameters=[],
+        operation_summary="Place Bid",
+        manual_parameters=safe_generate_form_parameters(BidSerializer),
+        consumes=['application/x-www-form-urlencoded','multipart/form-data'],
+        responses={201: openapi.Response('Bid placed successfully'), 400: 'Validation error'},
         tags=['auction']
     )
     def post(self, request, *args, **kwargs):
@@ -203,7 +219,7 @@ class PlaceBidView(generics.CreateAPIView):
         if float(bid_amount) < float(auction.starting_price):
             return Response({"error": "Your bid must be higher than the starting price."}, status=status.HTTP_400_BAD_REQUEST)
 
-        bid = Bid.objects.create(auction=auction, bidder=user, bid_amount=bid_amount)
+        Bid.objects.create(auction=auction, bidder=user, bid_amount=bid_amount)
         auction.highest_bid = bid_amount
         auction.highest_bidder = user
         auction.save(update_fields=['highest_bid', 'highest_bidder'])
